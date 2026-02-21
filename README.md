@@ -17,7 +17,7 @@ Delad handlarlista-app med kategorier, AI-kategorisering (Gemini), realtid och r
    - `supabase/migrations/20250221000001_schema.sql`
    - `supabase/migrations/20250221000002_rls.sql`
    - `supabase/migrations/20250221000003_default_categories.sql`
-3. Under **Project Settings → API** kopierar du **Project URL** och **anon public** key.
+3. Under **Project Settings → API** kopierar du **Project URL** och **Publishable (anon) key**.
 
 ### 2. Edge Functions (Gemini)
 
@@ -35,7 +35,7 @@ Delad handlarlista-app med kategorier, AI-kategorisering (Gemini), realtid och r
 
 1. Kopiera `.env.example` till `.env` och fyll i:
    - `VITE_SUPABASE_URL` = Project URL från Supabase
-   - `VITE_SUPABASE_ANON_KEY` = anon key från Supabase
+   - `VITE_SUPABASE_PUBLISHABLE_KEY` = Publishable key från Supabase (samma som "anon" i API-inställningarna)
 2. Installera och starta:
    ```bash
    npm install
