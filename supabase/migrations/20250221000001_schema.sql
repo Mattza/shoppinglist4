@@ -94,6 +94,16 @@ create trigger list_items_updated_at
   before update on public.list_items
   for each row execute function public.set_updated_at();
 
--- Realtime: aktivera för list_items och categories
-alter publication supabase_realtime add table public.list_items;
-alter publication supabase_realtime add table public.categories;
+-- Realtime: aktivera för list_items och categories (ignorera om redan med)
+do $$
+begin
+  alter publication supabase_realtime add table public.list_items;
+exception
+  when duplicate_object then null;
+end $$;
+do $$
+begin
+  alter publication supabase_realtime add table public.categories;
+exception
+  when duplicate_object then null;
+end $$;
