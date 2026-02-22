@@ -35,7 +35,7 @@ Delad handlarlista-app med kategorier, AI-kategorisering (Gemini), realtid och r
 
 1. Kopiera `.env.example` till `.env` och fyll i:
    - `VITE_SUPABASE_URL` = Project URL från Supabase
-   - `VITE_SUPABASE_PUBLISHABLE_KEY` = Publishable key från Supabase (samma som "anon" i API-inställningarna)
+   - `VITE_SUPABASE_PUBLISHABLE_KEY` = Publishable key från Supabase (samma som "anon" i API-inställningarna). Vid 403 på t.ex. skapa lista: prova den **långa anon-nyckeln** (JWT-format) i stället för `sb_publishable_...` om din dashboard visar båda.
 2. Installera och starta:
    ```bash
    npm install
