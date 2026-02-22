@@ -26,6 +26,7 @@ export default function ListView() {
   const queryClient = useQueryClient()
   const [newItemName, setNewItemName] = useState('')
   const [newItemCategoryId, setNewItemCategoryId] = useState<string>('')
+  const [quickAddByCategory, setQuickAddByCategory] = useState<Record<string, string>>({})
   const [aiInput, setAiInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
 
@@ -41,7 +42,6 @@ export default function ListView() {
     enabled: !!listId,
   })
 
-  // Realtime
   useEffect(() => {
     if (!listId) return
     const channel = supabase
@@ -68,9 +68,10 @@ export default function ListView() {
       })
       if (error) throw error
     },
-    onSuccess: () => {
+    onSuccess: (_, { category_id }) => {
       queryClient.invalidateQueries({ queryKey: ['list_items', listId] })
       setNewItemName('')
+      setQuickAddByCategory((prev) => ({ ...prev, [category_id]: '' }))
     },
   })
 
@@ -141,11 +142,18 @@ export default function ListView() {
     items: items.filter((i) => i.category_id === cat.id),
   }))
 
+  function handleAddToCategory(categoryId: string, name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    addItemMutation.mutate({ name: trimmed, category_id: categoryId })
+  }
+
   return (
     <div className="list-view">
       {list && <h1>{list.name}</h1>}
 
-      <section className="add-item">
+      {/* Sticky add bar – always visible */}
+      <section className="add-item-bar" aria-label="Lägg till vara">
         <h2>Lägg till vara</h2>
         <form
           onSubmit={(e) => {
@@ -156,65 +164,103 @@ export default function ListView() {
           }}
         >
           <input
+            className="input"
             placeholder="Namn på vara"
             value={newItemName}
             onChange={(e) => setNewItemName(e.target.value)}
+            aria-label="Namn på vara"
           />
           <select
+            className="input"
             value={newItemCategoryId}
             onChange={(e) => setNewItemCategoryId(e.target.value)}
+            aria-label="Välj kategori"
           >
             <option value="">Välj kategori</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          <button type="submit" disabled={!newItemName.trim() || !newItemCategoryId || addItemMutation.isPending}>
-            Lägg till
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={!newItemName.trim() || !newItemCategoryId || addItemMutation.isPending}
+          >
+            {addItemMutation.isPending ? 'Lägger till…' : 'Lägg till'}
           </button>
         </form>
       </section>
 
-      <section className="ai-categorize">
-        <h2>AI-kategorisering</h2>
-        <p className="hint">Skriv eller klistra in varor (en per rad eller separerade med komma). Klicka för att automatiskt lägga till dem i listans kategorier.</p>
-        <textarea
-          placeholder="t.ex. mjölk, äpplen, bröd"
-          value={aiInput}
-          onChange={(e) => setAiInput(e.target.value)}
-          rows={3}
-        />
-        <button type="button" onClick={handleAiCategorize} disabled={aiLoading || !aiInput.trim()}>
-          {aiLoading ? 'Kategoriserar...' : 'Kategorisera med AI'}
-        </button>
-      </section>
-
-      <section className="categories-section">
-        <h2>Kategorier</h2>
+      {/* Categories with items – main focus */}
+      <section className="categories-section" aria-label="Kategorier och varor">
+        <h2>Varor i kategorier</h2>
         <div className="category-list">
-          {categories.map((cat) => (
-            <div key={cat.id} className="category-card">
+          {itemsByCategory.map(({ category: cat, items: catItems }) => (
+            <article key={cat.id} className="category-card">
               <div className="category-header">
                 <h3>{cat.name}</h3>
                 {!DEFAULT_CATEGORY_NAMES.includes(cat.name) && (
-                  <button type="button" className="btn-remove-cat" onClick={() => deleteCategoryMutation.mutate(cat.id)} title="Ta bort kategori">
+                  <button
+                    type="button"
+                    className="btn-remove-cat"
+                    onClick={() => deleteCategoryMutation.mutate(cat.id)}
+                    title="Ta bort kategori"
+                    aria-label={`Ta bort kategorin ${cat.name}`}
+                  >
                     ×
                   </button>
                 )}
               </div>
-              <ul>
-                {itemsByCategory.find((g) => g.category.id === cat.id)?.items.map((item) => (
+              <ul aria-label={`Varor i ${cat.name}`}>
+                {catItems.map((item) => (
                   <li key={item.id} className="item-row">
                     <span>{item.name}</span>
-                    <button type="button" className="btn-remove" onClick={() => removeItemMutation.mutate(item)} title="Ta bort (sparas i arkiv)">
+                    <button
+                      type="button"
+                      className="btn-remove"
+                      onClick={() => removeItemMutation.mutate(item)}
+                      title="Ta bort (sparas i arkiv)"
+                      aria-label={`Ta bort ${item.name}`}
+                    >
                       Ta bort
                     </button>
                   </li>
-                )) ?? null}
+                ))}
               </ul>
-            </div>
+              {/* Per-category quick add */}
+              <form
+                className="quick-add-in-category"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  const name = quickAddByCategory[cat.id]?.trim()
+                  if (name) handleAddToCategory(cat.id, name)
+                }}
+              >
+                <input
+                  className="input"
+                  placeholder={`Lägg till i ${cat.name}…`}
+                  value={quickAddByCategory[cat.id] ?? ''}
+                  onChange={(e) => setQuickAddByCategory((prev) => ({ ...prev, [cat.id]: e.target.value }))}
+                  aria-label={`Lägg till vara i ${cat.name}`}
+                />
+                <button
+                  type="submit"
+                  className="btn-secondary"
+                  disabled={!quickAddByCategory[cat.id]?.trim() || addItemMutation.isPending}
+                >
+                  Lägg till
+                </button>
+              </form>
+            </article>
           ))}
         </div>
+        {categories.length === 0 && (
+          <p className="empty">Inga kategorier än. Lägg till en nedan.</p>
+        )}
+      </section>
+
+      {/* Add category + AI – secondary */}
+      <div className="secondary-actions">
         <form
           className="add-category-form"
           onSubmit={(e) => {
@@ -226,10 +272,33 @@ export default function ListView() {
             }
           }}
         >
-          <input name="newCategory" placeholder="Ny kategori" />
-          <button type="submit" disabled={addCategoryMutation.isPending}>Lägg till kategori</button>
+          <input name="newCategory" className="input" placeholder="Ny kategori" aria-label="Namn på ny kategori" />
+          <button type="submit" className="btn-primary" disabled={addCategoryMutation.isPending}>
+            Lägg till kategori
+          </button>
         </form>
-      </section>
+
+        <section className="ai-categorize">
+          <h2>AI-kategorisering</h2>
+          <p className="hint">Skriv eller klistra in varor (en per rad eller separerade med komma). Klicka för att automatiskt lägga till dem i listans kategorier.</p>
+          <textarea
+            className="input"
+            placeholder="t.ex. mjölk, äpplen, bröd"
+            value={aiInput}
+            onChange={(e) => setAiInput(e.target.value)}
+            rows={3}
+            aria-label="Varor att kategorisera med AI"
+          />
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={handleAiCategorize}
+            disabled={aiLoading || !aiInput.trim()}
+          >
+            {aiLoading ? 'Kategoriserar…' : 'Kategorisera med AI'}
+          </button>
+        </section>
+      </div>
 
       <p className="nav-hint">
         <Link to={`/list/${listId}/recommendations`}>Rekommendationer</Link> baserat på arkivet

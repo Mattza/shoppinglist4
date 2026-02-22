@@ -120,7 +120,7 @@ export default function Recommendations() {
               <div className="suggestion-actions">
                 {categories.length > 0 && (
                   <select
-                    className="category-select"
+                    className="category-select input"
                     value=""
                     onChange={(e) => {
                       const id = e.target.value
@@ -136,6 +136,7 @@ export default function Recommendations() {
                 )}
                 <div className="feedback-row">
                   <input
+                    className="input"
                     placeholder="Vad tycker du? (t.ex. bra/redan köpt)"
                     value={feedbackBySuggestion[s] ?? ''}
                     onChange={(e) => setFeedbackBySuggestion((prev) => ({ ...prev, [s]: e.target.value }))}
@@ -146,6 +147,7 @@ export default function Recommendations() {
                   />
                   <button
                     type="button"
+                    className="btn-primary"
                     onClick={() => submitFeedback(s)}
                     disabled={!feedbackBySuggestion[s]?.trim() || submittingFeedback === s}
                   >

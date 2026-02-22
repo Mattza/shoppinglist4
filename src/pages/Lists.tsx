@@ -68,11 +68,13 @@ export default function Lists() {
       <h1>Mina listor</h1>
       <form onSubmit={handleCreate} className="create-list-form">
         <input
+          className="input"
           placeholder="Namn på ny lista"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
+          aria-label="Namn på ny lista"
         />
-        <button type="submit" disabled={createMutation.isPending || !user}>
+        <button type="submit" className="btn-primary" disabled={createMutation.isPending || !user}>
           Skapa lista
         </button>
       </form>
