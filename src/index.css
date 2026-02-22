@@ -88,50 +88,105 @@ a:hover {
   margin: 0 auto;
   display: flex;
   align-items: center;
-  gap: var(--space-lg);
-}
-
-.logo {
-  font-family: 'Rubik', sans-serif;
-  font-weight: 600;
-  color: var(--color-surface);
-  margin-right: auto;
-  font-size: 1.25rem;
-}
-
-.header nav {
-  display: flex;
   gap: var(--space-md);
 }
 
-.header nav a {
-  color: var(--color-secondary);
-  font-weight: 500;
-}
-
-.header nav a:hover {
-  color: var(--color-surface);
-}
-
-.user {
+.header-tabs {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  font-size: 0.9rem;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
-.user button {
-  background: transparent;
-  border: 1px solid rgba(255,255,255,0.5);
-  color: var(--color-surface);
-  padding: 0.35rem 0.6rem;
+.header-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+
+.header-tab {
+  flex-shrink: 0;
+  padding: var(--space-sm) var(--space-md);
+  color: var(--color-secondary);
+  font-weight: 500;
+  font-size: 0.95rem;
   border-radius: var(--radius);
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+
+.header-tab:hover {
+  color: var(--color-surface);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.header-tab--active {
+  color: var(--color-surface);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.header-actions {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.header-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: var(--color-surface);
+  font-size: 1.25rem;
+  line-height: 1;
+  border-radius: var(--radius);
+  cursor: pointer;
   transition: background var(--transition), border-color var(--transition);
 }
 
-.user button:hover {
-  background: rgba(255,255,255,0.15);
-  border-color: rgba(255,255,255,0.7);
+.header-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.header-dropdown {
+  position: absolute;
+  top: calc(100% + var(--space-xs));
+  right: 0;
+  min-width: 10rem;
+  padding: var(--space-xs);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+}
+
+.header-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  text-align: left;
+  color: var(--color-text);
+  font-size: 0.95rem;
+  border-radius: var(--radius);
+  transition: background var(--transition);
+}
+
+.header-dropdown-item:hover {
+  background: var(--color-background);
+}
+
+.header-dropdown-item--button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .main {
@@ -430,10 +485,11 @@ a:hover {
   margin-top: var(--space-md);
 }
 
-/* List view – sticky add bar + category-focused */
+/* List view – sticky add bar at bottom + category-focused */
 .list-view {
   max-width: 800px;
   margin: 0 auto;
+  padding-bottom: 120px; /* space for fixed bottom add bar */
 }
 
 .list-view h1 {
@@ -442,19 +498,34 @@ a:hover {
   font-family: 'Rubik', sans-serif;
 }
 
-/* Sticky add-item bar – always visible */
+/* Sticky container at bottom – also used when rendered via portal into body */
+.add-item-bar-container,
+.list-view .add-item-bar-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: var(--space-md);
+  padding-bottom: max(var(--space-md), env(safe-area-inset-bottom));
+  background: var(--color-background);
+  border-top: 1px solid var(--color-border);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Add-item bar inside container */
+.add-item-bar-container .add-item-bar,
 .list-view .add-item-bar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  max-width: 800px;
+  margin: 0 auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-md);
-  margin-bottom: var(--space-xl);
   box-shadow: var(--shadow-md);
 }
 
+.add-item-bar-container .add-item-bar h2,
 .list-view .add-item-bar h2 {
   font-size: 0.95rem;
   font-family: 'Rubik', sans-serif;
@@ -462,6 +533,7 @@ a:hover {
   color: var(--color-text);
 }
 
+.add-item-bar-container .add-item-bar form,
 .list-view .add-item-bar form {
   display: flex;
   flex-wrap: wrap;
@@ -469,6 +541,8 @@ a:hover {
   align-items: center;
 }
 
+.add-item-bar-container .add-item-bar input,
+.add-item-bar-container .add-item-bar select,
 .list-view .add-item-bar input,
 .list-view .add-item-bar select {
   padding: 0.5rem 0.75rem;
@@ -478,6 +552,7 @@ a:hover {
   min-width: 140px;
 }
 
+.add-item-bar-container .add-item-bar button[type="submit"],
 .list-view .add-item-bar button[type="submit"] {
   padding: 0.5rem 1rem;
   background: var(--color-cta);
@@ -489,6 +564,7 @@ a:hover {
   transition: opacity var(--transition), transform var(--transition);
 }
 
+.add-item-bar-container .add-item-bar button[type="submit"]:hover:not(:disabled),
 .list-view .add-item-bar button[type="submit"]:hover:not(:disabled) {
   opacity: 0.9;
   transform: translateY(-1px);
@@ -584,6 +660,22 @@ a:hover {
 
 .list-view .item-row span {
   font-weight: 500;
+  flex: 1;
+  min-width: 0;
+}
+
+.list-view .item-row-actions {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.list-view .item-category-select {
+  min-width: 0;
+  max-width: 140px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.9rem;
 }
 
 /* Per-category quick add */

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
@@ -25,7 +26,6 @@ export default function ListView() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const [newItemName, setNewItemName] = useState('')
-  const [newItemCategoryId, setNewItemCategoryId] = useState<string>('')
   const [quickAddByCategory, setQuickAddByCategory] = useState<Record<string, string>>({})
   const [aiInput, setAiInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
@@ -41,6 +41,8 @@ export default function ListView() {
     queryFn: () => fetchItems(listId!),
     enabled: !!listId,
   })
+
+  const defaultCategoryId = categories.find((c) => c.name === 'Övrigt')?.id ?? categories[0]?.id ?? ''
 
   useEffect(() => {
     if (!listId) return
@@ -84,6 +86,14 @@ export default function ListView() {
         category_name: item.category?.name ?? null,
       })
       const { error } = await supabase.from('list_items').delete().eq('id', item.id)
+      if (error) throw error
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['list_items', listId] }),
+  })
+
+  const updateItemCategoryMutation = useMutation({
+    mutationFn: async ({ itemId, categoryId }: { itemId: string; categoryId: string }) => {
+      const { error } = await supabase.from('list_items').update({ category_id: categoryId }).eq('id', itemId)
       if (error) throw error
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['list_items', listId] }),
@@ -152,45 +162,6 @@ export default function ListView() {
     <div className="list-view">
       {list && <h1>{list.name}</h1>}
 
-      {/* Sticky add bar – always visible */}
-      <section className="add-item-bar" aria-label="Lägg till vara">
-        <h2>Lägg till vara</h2>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (newItemName.trim() && newItemCategoryId) {
-              addItemMutation.mutate({ name: newItemName.trim(), category_id: newItemCategoryId })
-            }
-          }}
-        >
-          <input
-            className="input"
-            placeholder="Namn på vara"
-            value={newItemName}
-            onChange={(e) => setNewItemName(e.target.value)}
-            aria-label="Namn på vara"
-          />
-          <select
-            className="input"
-            value={newItemCategoryId}
-            onChange={(e) => setNewItemCategoryId(e.target.value)}
-            aria-label="Välj kategori"
-          >
-            <option value="">Välj kategori</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="btn-primary"
-            disabled={!newItemName.trim() || !newItemCategoryId || addItemMutation.isPending}
-          >
-            {addItemMutation.isPending ? 'Lägger till…' : 'Lägg till'}
-          </button>
-        </form>
-      </section>
-
       {/* Categories with items – main focus */}
       <section className="categories-section" aria-label="Kategorier och varor">
         <h2>Varor i kategorier</h2>
@@ -215,15 +186,33 @@ export default function ListView() {
                 {catItems.map((item) => (
                   <li key={item.id} className="item-row">
                     <span>{item.name}</span>
-                    <button
-                      type="button"
-                      className="btn-remove"
-                      onClick={() => removeItemMutation.mutate(item)}
-                      title="Ta bort (sparas i arkiv)"
-                      aria-label={`Ta bort ${item.name}`}
-                    >
-                      Ta bort
-                    </button>
+                    <div className="item-row-actions">
+                      <select
+                        className="input item-category-select"
+                        value={item.category_id}
+                        onChange={(e) => {
+                          const categoryId = e.target.value
+                          if (categoryId && categoryId !== item.category_id) {
+                            updateItemCategoryMutation.mutate({ itemId: item.id, categoryId })
+                          }
+                        }}
+                        aria-label={`Kategori för ${item.name}`}
+                        disabled={updateItemCategoryMutation.isPending}
+                      >
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="btn-remove"
+                        onClick={() => removeItemMutation.mutate(item)}
+                        title="Ta bort (sparas i arkiv)"
+                        aria-label={`Ta bort ${item.name}`}
+                      >
+                        Ta bort
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -303,6 +292,39 @@ export default function ListView() {
       <p className="nav-hint">
         <Link to={`/list/${listId}/recommendations`}>Rekommendationer</Link> baserat på arkivet
       </p>
+
+      {/* Add bar rendered in portal so it stays fixed to viewport (no scroll parent) */}
+      {createPortal(
+        <div className="add-item-bar-container">
+          <section className="add-item-bar" aria-label="Lägg till vara">
+            <h2>Lägg till vara</h2>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (newItemName.trim() && defaultCategoryId) {
+                  addItemMutation.mutate({ name: newItemName.trim(), category_id: defaultCategoryId })
+                }
+              }}
+            >
+              <input
+                className="input"
+                placeholder="Namn på vara (läggs i Övrigt)"
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+                aria-label="Namn på vara"
+              />
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={!newItemName.trim() || !defaultCategoryId || addItemMutation.isPending}
+              >
+                {addItemMutation.isPending ? 'Lägger till…' : 'Lägg till'}
+              </button>
+            </form>
+          </section>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
