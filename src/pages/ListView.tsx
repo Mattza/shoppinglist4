@@ -5,6 +5,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { useCurrentList } from '@/hooks/useCurrentList'
+import { Button } from '@/components/Button'
+import { Input } from '@/components/Input'
+import { Card } from '@/components/Card'
 import type { Category, ListItem } from '@/types/database'
 
 const DEFAULT_CATEGORY_NAMES = ['Frukt och grönt', 'Bröd', 'Kött', 'Mejeri', 'Frysvaror', 'Hem och hushåll', 'Övrigt']
@@ -187,53 +190,111 @@ export default function ListView() {
   }
 
   return (
-    <div className="list-view">
-      <div className="list-view-header">
-        {list && <h1>{list.name}</h1>}
+    <div className="relative mx-auto max-w-3xl space-y-8 pb-32">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        {list && (
+          <h1 className="text-3xl font-display font-semibold text-text">
+            {list.name}
+          </h1>
+        )}
         {list?.role === 'owner' && (
-          <button type="button" className="btn-secondary" onClick={() => { setInviteOpen(true); setInviteMessage(null); setInviteEmail(''); }} aria-label="Bjud in till listan">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setInviteOpen(true)
+              setInviteMessage(null)
+              setInviteEmail('')
+            }}
+            aria-label="Bjud in till listan"
+          >
             Bjud in
-          </button>
+          </Button>
         )}
       </div>
 
-      {inviteOpen && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="invite-title">
-          <div className="modal-dialog">
-            <h2 id="invite-title">Bjud in till listan</h2>
-            <p className="hint">Ange e-postadressen till någon som redan har ett konto. De får tillgång till listan under Mina listor.</p>
-            <form onSubmit={handleInviteSubmit}>
-              <input
-                type="email"
-                className="input"
-                placeholder="t.ex. namn@example.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                aria-label="E-postadress"
-                required
-              />
-              {inviteMessage && <p className={inviteMessage.type === 'error' ? 'invite-error' : 'invite-success'}>{inviteMessage.text}</p>}
-              <div className="modal-actions">
-                <button type="button" className="btn-ghost" onClick={() => { setInviteOpen(false); setInviteMessage(null); }}>Avbryt</button>
-                <button type="submit" className="btn-primary">Bjud in</button>
+      {inviteOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="invite-title"
+          >
+            <Card className="w-full max-w-md space-y-4">
+              <div>
+                <h2
+                  id="invite-title"
+                  className="text-xl font-display font-semibold text-text"
+                >
+                  Bjud in till listan
+                </h2>
+                <p className="mt-1 text-sm text-text-muted">
+                  Ange e-postadressen till någon som redan har ett konto. De
+                  får tillgång till listan under Mina listor.
+                </p>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+              <form onSubmit={handleInviteSubmit} className="space-y-3">
+                <Input
+                  type="email"
+                  placeholder="t.ex. namn@example.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  aria-label="E-postadress"
+                  required
+                />
+                {inviteMessage && (
+                  <p
+                    className={
+                      inviteMessage.type === 'error'
+                        ? 'text-sm text-red-600'
+                        : 'text-sm text-cta'
+                    }
+                  >
+                    {inviteMessage.text}
+                  </p>
+                )}
+                <div className="flex justify-end gap-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setInviteOpen(false)
+                      setInviteMessage(null)
+                    }}
+                  >
+                    Avbryt
+                  </Button>
+                  <Button type="submit">
+                    Bjud in
+                  </Button>
+                </div>
+              </form>
+            </Card>
+          </div>,
+          document.body,
+        )}
 
       {/* Categories with items – main focus */}
-      <section className="categories-section" aria-label="Kategorier och varor">
-        <h2>Varor i kategorier</h2>
-        <div className="category-list">
+      <section className="space-y-4" aria-label="Kategorier och varor">
+        <div>
+          <h2 className="text-lg font-display font-semibold text-text">
+            Varor i kategorier
+          </h2>
+          <p className="text-sm text-text-muted">
+            Håll din lista organiserad genom att gruppera varor per kategori.
+          </p>
+        </div>
+        <div className="space-y-4">
           {itemsByCategory.map(({ category: cat, items: catItems }) => (
-            <article key={cat.id} className="category-card">
-              <div className="category-header">
-                <h3>{cat.name}</h3>
+            <Card key={cat.id} className="space-y-3">
+              <div className="flex items-center justify-between border-b border-border pb-2">
+                <h3 className="font-display text-sm font-semibold text-primary">
+                  {cat.name}
+                </h3>
                 {!DEFAULT_CATEGORY_NAMES.includes(cat.name) && (
                   <button
                     type="button"
-                    className="btn-remove-cat"
+                    className="text-sm text-text-muted hover:text-red-700 hover:bg-red-50 rounded-md px-2 py-1"
                     onClick={() => deleteCategoryMutation.mutate(cat.id)}
                     title="Ta bort kategori"
                     aria-label={`Ta bort kategorin ${cat.name}`}
@@ -242,13 +303,21 @@ export default function ListView() {
                   </button>
                 )}
               </div>
-              <ul aria-label={`Varor i ${cat.name}`}>
+              <ul
+                aria-label={`Varor i ${cat.name}`}
+                className="divide-y divide-border/70"
+              >
                 {catItems.map((item) => (
-                  <li key={item.id} className="item-row">
-                    <span>{item.name}</span>
-                    <div className="item-row-actions">
+                  <li
+                    key={item.id}
+                    className="flex items-center justify-between gap-3 py-2"
+                  >
+                    <span className="font-medium text-text">
+                      {item.name}
+                    </span>
+                    <div className="flex items-center gap-2">
                       <select
-                        className="input item-category-select"
+                        className="rounded-md border border-border-strong bg-surface px-2 py-1 text-xs text-text"
                         value={item.category_id}
                         onChange={(e) => {
                           const categoryId = e.target.value
@@ -263,55 +332,56 @@ export default function ListView() {
                           <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                       </select>
-                      <button
+                      <Button
                         type="button"
-                        className="btn-remove"
+                        variant="ghost"
                         onClick={() => removeItemMutation.mutate(item)}
                         title="Ta bort (sparas i arkiv)"
                         aria-label={`Ta bort ${item.name}`}
                       >
                         Ta bort
-                      </button>
+                      </Button>
                     </div>
                   </li>
                 ))}
               </ul>
               {/* Per-category quick add */}
               <form
-                className="quick-add-in-category"
+                className="mt-3 flex gap-2 border-t border-dashed border-border pt-3"
                 onSubmit={(e) => {
                   e.preventDefault()
                   const name = quickAddByCategory[cat.id]?.trim()
                   if (name) handleAddToCategory(cat.id, name)
                 }}
               >
-                <input
-                  className="input"
+                <Input
                   placeholder={`Lägg till i ${cat.name}…`}
                   value={quickAddByCategory[cat.id] ?? ''}
                   onChange={(e) => setQuickAddByCategory((prev) => ({ ...prev, [cat.id]: e.target.value }))}
                   aria-label={`Lägg till vara i ${cat.name}`}
                 />
-                <button
+                <Button
                   type="submit"
-                  className="btn-secondary"
+                  variant="secondary"
                   disabled={!quickAddByCategory[cat.id]?.trim() || addItemMutation.isPending}
                 >
                   Lägg till
-                </button>
+                </Button>
               </form>
-            </article>
+            </Card>
           ))}
         </div>
         {categories.length === 0 && (
-          <p className="empty">Inga kategorier än. Lägg till en nedan.</p>
+          <p className="text-sm text-text-muted">
+            Inga kategorier än. Lägg till en nedan.
+          </p>
         )}
       </section>
 
       {/* Add category + AI – secondary */}
-      <div className="secondary-actions">
+      <div className="mt-8 space-y-6 border-t border-border pt-6">
         <form
-          className="add-category-form"
+          className="flex flex-col items-start gap-3 sm:flex-row sm:items-center"
           onSubmit={(e) => {
             e.preventDefault()
             const name = (e.currentTarget.elements.namedItem('newCategory') as HTMLInputElement)?.value?.trim()
@@ -321,44 +391,67 @@ export default function ListView() {
             }
           }}
         >
-          <input name="newCategory" className="input" placeholder="Ny kategori" aria-label="Namn på ny kategori" />
-          <button type="submit" className="btn-primary" disabled={addCategoryMutation.isPending}>
+          <Input
+            name="newCategory"
+            placeholder="Ny kategori"
+            aria-label="Namn på ny kategori"
+            className="w-full sm:w-60"
+          />
+          <Button type="submit" disabled={addCategoryMutation.isPending}>
             Lägg till kategori
-          </button>
+          </Button>
         </form>
 
-        <section className="ai-categorize">
-          <h2>AI-kategorisering</h2>
-          <p className="hint">Skriv eller klistra in varor (en per rad eller separerade med komma). Klicka för att automatiskt lägga till dem i listans kategorier.</p>
+        <section className="space-y-2">
+          <h2 className="text-base font-display font-semibold text-text">
+            AI-kategorisering
+          </h2>
+          <p className="text-sm text-text-muted">
+            Skriv eller klistra in varor (en per rad eller separerade med
+            komma). Klicka för att automatiskt lägga till dem i listans
+            kategorier.
+          </p>
           <textarea
-            className="input"
+            className="block w-full min-h-[80px] rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="t.ex. mjölk, äpplen, bröd"
             value={aiInput}
             onChange={(e) => setAiInput(e.target.value)}
             rows={3}
             aria-label="Varor att kategorisera med AI"
           />
-          <button
+          <Button
             type="button"
-            className="btn-secondary"
+            variant="secondary"
             onClick={handleAiCategorize}
             disabled={aiLoading || !aiInput.trim()}
           >
             {aiLoading ? 'Kategoriserar…' : 'Kategorisera med AI'}
-          </button>
+          </Button>
         </section>
       </div>
 
-      <p className="nav-hint">
-        <Link to={`/list/${listId}/recommendations`}>Rekommendationer</Link> baserat på arkivet
+      <p className="mt-4 text-sm text-text-muted">
+        <Link
+          className="font-semibold text-primary hover:underline"
+          to={`/list/${listId}/recommendations`}
+        >
+          Rekommendationer
+        </Link>{' '}
+        baserat på arkivet
       </p>
 
       {/* Add bar rendered in portal so it stays fixed to viewport (no scroll parent) */}
       {createPortal(
-        <div className="add-item-bar-container">
-          <section className="add-item-bar" aria-label="Lägg till vara">
-            <h2>Lägg till vara</h2>
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 px-4 py-3 backdrop-blur">
+          <section
+            className="mx-auto max-w-3xl rounded-lg border border-border bg-surface px-4 py-3 shadow-md"
+            aria-label="Lägg till vara"
+          >
+            <h2 className="mb-2 text-sm font-display font-semibold text-text">
+              Lägg till vara
+            </h2>
             <form
+              className="flex flex-col gap-3 sm:flex-row"
               onSubmit={(e) => {
                 e.preventDefault()
                 if (newItemName.trim() && defaultCategoryId) {
@@ -366,20 +459,19 @@ export default function ListView() {
                 }
               }}
             >
-              <input
-                className="input"
+              <Input
                 placeholder="Namn på vara (läggs i Övrigt)"
                 value={newItemName}
                 onChange={(e) => setNewItemName(e.target.value)}
                 aria-label="Namn på vara"
               />
-              <button
+              <Button
                 type="submit"
-                className="btn-primary"
                 disabled={!newItemName.trim() || !defaultCategoryId || addItemMutation.isPending}
+                className="sm:w-auto w-full"
               >
                 {addItemMutation.isPending ? 'Lägger till…' : 'Lägg till'}
-              </button>
+              </Button>
             </form>
           </section>
         </div>,

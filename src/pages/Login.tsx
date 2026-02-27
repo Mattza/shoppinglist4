@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { Button } from '@/components/Button'
+import { Input } from '@/components/Input'
+import { Card } from '@/components/Card'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -50,51 +53,76 @@ export default function Login() {
   }
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <h1>Handlarlista</h1>
-        <p className="login-sub">Logga in för att använda appen</p>
-        <button
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      <Card className="w-full max-w-md space-y-6 text-center">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-display font-semibold text-text">
+            Handlarlista
+          </h1>
+          <p className="text-sm text-text-muted">
+            Logga in för att använda appen
+          </p>
+        </div>
+
+        <Button
           type="button"
-          className="login-google-btn"
+          variant="secondary"
+          className="w-full justify-center"
           onClick={handleGoogleSignIn}
           disabled={loading}
         >
           {loading ? 'Vänta...' : 'Logga in med Google'}
-        </button>
-        <div className="login-divider">eller</div>
-        <form onSubmit={handleSubmit}>
-          <label>
-            E-post
-            <input
-              className="input"
+        </Button>
+
+        <div className="flex items-center gap-2 text-xs text-text-muted">
+          <span className="h-px flex-1 bg-border" />
+          <span>eller</span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 text-left">
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-text">
+              E-post
+            </label>
+            <Input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
             />
-          </label>
-          <label>
-            Lösenord
-            <input
-              className="input"
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-text">
+              Lösenord
+            </label>
+            <Input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete={isSignUp ? 'new-password' : 'current-password'}
             />
-          </label>
-          {error && <p className="error">{error}</p>}
-          <button type="submit" className="btn-primary" disabled={loading}>
+          </div>
+          {error && (
+            <p className="text-sm text-red-600">
+              {error}
+            </p>
+          )}
+          <Button type="submit" className="w-full justify-center" disabled={loading}>
             {loading ? 'Vänta...' : isSignUp ? 'Skapa konto' : 'Logga in'}
-          </button>
+          </Button>
         </form>
-        <button type="button" className="link-btn" onClick={() => setIsSignUp((v) => !v)}>
+
+        <button
+          type="button"
+          className="text-sm text-primary hover:underline"
+          onClick={() => setIsSignUp((v) => !v)}
+        >
           {isSignUp ? 'Har du konto? Logga in' : 'Skapa konto'}
         </button>
-      </div>
+      </Card>
     </div>
   )
 }

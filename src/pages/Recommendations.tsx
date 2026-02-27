@@ -4,6 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useCurrentList } from '@/hooks/useCurrentList'
 import { useAuth } from '@/hooks/useAuth'
+import { Button } from '@/components/Button'
+import { Input } from '@/components/Input'
+import { Card } from '@/components/Card'
 
 async function fetchRecommendations(listId: string, accessToken: string): Promise<string[]> {
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-recommendations`
@@ -103,24 +106,44 @@ export default function Recommendations() {
   }
 
   return (
-    <div className="recommendations-page">
-      <h1>Rekommendationer</h1>
-      {list && <p className="list-name">För listan: {list.name}</p>}
-      <p className="hint">Förslag baserat på vad du tidigare tagit bort från listan. Lägg till det du vill och skriv gärna vad du tycker om förslagen så blir nästa rekommendation bättre.</p>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <header className="space-y-1">
+        <h1 className="text-3xl font-display font-semibold text-text">
+          Rekommendationer
+        </h1>
+        {list && (
+          <p className="text-sm text-text-muted">
+            För listan: <span className="font-semibold">{list.name}</span>
+          </p>
+        )}
+        <p className="text-sm text-text-muted">
+          Förslag baserat på vad du tidigare tagit bort från listan. Lägg till
+          det du vill och skriv gärna vad du tycker om förslagen så blir nästa
+          rekommendation bättre.
+        </p>
+      </header>
 
       {isLoading ? (
-        <p>Laddar rekommendationer...</p>
+        <p className="text-sm text-text-muted">
+          Laddar rekommendationer...
+        </p>
       ) : suggestions.length === 0 ? (
-        <p className="empty">Inga rekommendationer än. Ta bort några varor från listan så bygger vi upp ett arkiv.</p>
+        <p className="text-sm text-text-muted">
+          Inga rekommendationer än. Ta bort några varor från listan så bygger vi
+          upp ett arkiv.
+        </p>
       ) : (
-        <ul className="suggestions-list">
+        <ul className="flex flex-col gap-4">
           {suggestions.map((s) => (
-            <li key={s} className="suggestion-item">
-              <span className="suggestion-text">{s}</span>
-              <div className="suggestion-actions">
+            <li key={s}>
+              <Card className="space-y-3">
+                <span className="block font-semibold text-text">
+                  {s}
+                </span>
+                <div className="flex flex-wrap items-center gap-3">
                 {categories.length > 0 && (
                   <select
-                    className="category-select input"
+                      className="rounded-md border border-border-strong bg-surface px-3 py-1 text-sm text-text"
                     value=""
                     onChange={(e) => {
                       const id = e.target.value
@@ -134,35 +157,43 @@ export default function Recommendations() {
                     ))}
                   </select>
                 )}
-                <div className="feedback-row">
-                  <input
-                    className="input"
-                    placeholder="Vad tycker du? (t.ex. bra/redan köpt)"
-                    value={feedbackBySuggestion[s] ?? ''}
-                    onChange={(e) => setFeedbackBySuggestion((prev) => ({ ...prev, [s]: e.target.value }))}
-                    onBlur={() => {
-                      const fb = feedbackBySuggestion[s]?.trim()
-                      if (fb) submitFeedback(s)
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    onClick={() => submitFeedback(s)}
-                    disabled={!feedbackBySuggestion[s]?.trim() || submittingFeedback === s}
-                  >
-                    {submittingFeedback === s ? 'Sparar...' : 'Spara feedback'}
-                  </button>
+                  <div className="flex flex-1 items-center gap-2">
+                    <Input
+                      className="w-full text-sm"
+                      placeholder="Vad tycker du? (t.ex. bra/redan köpt)"
+                      value={feedbackBySuggestion[s] ?? ''}
+                      onChange={(e) =>
+                        setFeedbackBySuggestion((prev) => ({ ...prev, [s]: e.target.value }))
+                      }
+                      onBlur={() => {
+                        const fb = feedbackBySuggestion[s]?.trim()
+                        if (fb) submitFeedback(s)
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      className="whitespace-nowrap"
+                      onClick={() => submitFeedback(s)}
+                      disabled={!feedbackBySuggestion[s]?.trim() || submittingFeedback === s}
+                    >
+                      {submittingFeedback === s ? 'Sparar...' : 'Spara feedback'}
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              </Card>
             </li>
           ))}
         </ul>
       )}
 
-      <button type="button" className="refetch-btn" onClick={() => refetch()} disabled={isLoading}>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => refetch()}
+        disabled={isLoading}
+      >
         Uppdatera rekommendationer
-      </button>
+      </Button>
     </div>
   )
 }
