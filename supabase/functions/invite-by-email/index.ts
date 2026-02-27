@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    const emailFilter = encodeURIComponent(`email=eq.${email.trim().toLowerCase()}`)
+    const emailFilter = encodeURIComponent(`email.eq.${email.trim().toLowerCase()}`)
     const res = await fetch(`${supabaseUrl}/auth/v1/admin/users?filter=${emailFilter}`, {
       headers: { 'apikey': serviceRoleKey, 'Authorization': `Bearer ${serviceRoleKey}` },
     })

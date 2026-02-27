@@ -29,6 +29,9 @@ export default function ListView() {
   const [quickAddByCategory, setQuickAddByCategory] = useState<Record<string, string>>({})
   const [aiInput, setAiInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteMessage, setInviteMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const { data: list } = useCurrentList(listId ?? undefined)
   const { data: categories = [] } = useQuery({
@@ -158,9 +161,66 @@ export default function ListView() {
     addItemMutation.mutate({ name: trimmed, category_id: categoryId })
   }
 
+  async function handleInviteSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const email = inviteEmail.trim()
+    if (!email || !listId) return
+    setInviteMessage(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-by-email`
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ list_id: listId, email }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setInviteMessage({ type: 'error', text: json?.error ?? 'Kunde inte bjuda in' })
+        return
+      }
+      setInviteMessage({ type: 'success', text: 'Inbjudan skickad! De kan nu se listan under Mina listor.' })
+      setInviteEmail('')
+    } catch {
+      setInviteMessage({ type: 'error', text: 'Något gick fel. Försök igen.' })
+    }
+  }
+
   return (
     <div className="list-view">
-      {list && <h1>{list.name}</h1>}
+      <div className="list-view-header">
+        {list && <h1>{list.name}</h1>}
+        {list?.role === 'owner' && (
+          <button type="button" className="btn-secondary" onClick={() => { setInviteOpen(true); setInviteMessage(null); setInviteEmail(''); }} aria-label="Bjud in till listan">
+            Bjud in
+          </button>
+        )}
+      </div>
+
+      {inviteOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="invite-title">
+          <div className="modal-dialog">
+            <h2 id="invite-title">Bjud in till listan</h2>
+            <p className="hint">Ange e-postadressen till någon som redan har ett konto. De får tillgång till listan under Mina listor.</p>
+            <form onSubmit={handleInviteSubmit}>
+              <input
+                type="email"
+                className="input"
+                placeholder="t.ex. namn@example.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                aria-label="E-postadress"
+                required
+              />
+              {inviteMessage && <p className={inviteMessage.type === 'error' ? 'invite-error' : 'invite-success'}>{inviteMessage.text}</p>}
+              <div className="modal-actions">
+                <button type="button" className="btn-ghost" onClick={() => { setInviteOpen(false); setInviteMessage(null); }}>Avbryt</button>
+                <button type="submit" className="btn-primary">Bjud in</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Categories with items – main focus */}
       <section className="categories-section" aria-label="Kategorier och varor">

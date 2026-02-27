@@ -498,6 +498,75 @@ a:hover {
   font-family: 'Rubik', sans-serif;
 }
 
+.list-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+  flex-wrap: wrap;
+}
+
+.list-view-header h1 {
+  margin: 0;
+}
+
+/* Modal (invite) */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+}
+
+.modal-dialog {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  padding: var(--space-xl);
+  max-width: 400px;
+  width: 100%;
+}
+
+.modal-dialog h2 {
+  margin: 0 0 var(--space-sm);
+  font-size: 1.25rem;
+  font-family: 'Rubik', sans-serif;
+}
+
+.modal-dialog .hint {
+  margin: 0 0 var(--space-lg);
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.modal-dialog form .input {
+  width: 100%;
+  margin-bottom: var(--space-md);
+}
+
+.invite-error {
+  color: #b91c1c;
+  font-size: 0.9rem;
+  margin: 0 0 var(--space-md);
+}
+
+.invite-success {
+  color: var(--color-cta);
+  font-size: 0.9rem;
+  margin: 0 0 var(--space-md);
+}
+
+.modal-actions {
+  display: flex;
+  gap: var(--space-md);
+  justify-content: flex-end;
+}
+
 /* Sticky container at bottom – also used when rendered via portal into body */
 .add-item-bar-container,
 .list-view .add-item-bar-container {
