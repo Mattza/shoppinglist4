@@ -10,16 +10,6 @@ import { Input } from "@/components/Input";
 import { Card } from "@/components/Card";
 import type { Category, ListItem } from "@/types/database";
 
-const DEFAULT_CATEGORY_NAMES = [
-  "Frukt och grönt",
-  "Bröd",
-  "Kött",
-  "Mejeri",
-  "Frysvaror",
-  "Hem och hushåll",
-  "Övrigt",
-];
-
 async function fetchCategories(listId: string) {
   const { data, error } = await supabase
     .from("categories")
@@ -171,14 +161,20 @@ export default function ListView() {
 
   const deleteCategoryMutation = useMutation({
     mutationFn: async (categoryId: string) => {
+      if (categories.length <= 1) {
+        throw new Error("Du kan inte ta bort sista kategorin.");
+      }
+      const fallbackCategory = categories.find((c) => c.id !== categoryId);
+      if (!fallbackCategory) throw new Error("Ingen annan kategori att flytta varor till.");
       const count = items.filter((i) => i.category_id === categoryId).length;
-      if (count > 0)
-        if (
-          !confirm(
-            `${count} varor har denna kategori. Ta bort kategorin ändå? (Varorna tas inte bort.)`
-          )
-        )
-          return;
+      if (count > 0) {
+        const { error: updateError } = await supabase
+          .from("list_items")
+          .update({ category_id: fallbackCategory.id })
+          .eq("list_id", listId!)
+          .eq("category_id", categoryId);
+        if (updateError) throw updateError;
+      }
       const { error } = await supabase
         .from("categories")
         .delete()
@@ -356,15 +352,16 @@ export default function ListView() {
                 <h3 className="font-display text-base font-semibold text-[#1f2937]">
                   {cat.name}
                 </h3>
-                {!DEFAULT_CATEGORY_NAMES.includes(cat.name) && (
+                {categories.length > 1 && (
                   <button
                     type="button"
-                    className="text-sm text-[#6b7280] hover:text-red-700 hover:bg-red-50 rounded-md px-2 py-1"
+                    className="text-sm text-[#6b7280] hover:text-red-700 hover:bg-red-50 rounded-md px-2 py-1 disabled:opacity-50"
                     onClick={() => deleteCategoryMutation.mutate(cat.id)}
-                    title="Ta bort kategori"
+                    disabled={deleteCategoryMutation.isPending}
+                    title="Ta bort kategori (varor flyttas till annan kategori)"
                     aria-label={`Ta bort kategorin ${cat.name}`}
                   >
-                    ×
+                    Ta bort kategori
                   </button>
                 )}
               </div>
