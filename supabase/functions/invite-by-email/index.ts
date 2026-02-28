@@ -23,24 +23,17 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    const emailFilter = encodeURIComponent(`email.eq.${email.trim().toLowerCase()}`)
-    const res = await fetch(`${supabaseUrl}/auth/v1/admin/users?filter=${emailFilter}`, {
-      headers: { 'apikey': serviceRoleKey, 'Authorization': `Bearer ${serviceRoleKey}` },
-    })
-    if (!res.ok) {
-      const err = await res.text()
-      return new Response(JSON.stringify({ error: 'Could not look up user', details: err }), { status: 502, headers: { ...cors, 'Content-Type': 'application/json' } })
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
+    const { data: invitedUserId, error: lookupError } = await supabaseAdmin.rpc('get_user_id_by_email', { user_email: email.trim() })
+    if (lookupError) {
+      return new Response(JSON.stringify({ error: 'Could not look up user', details: lookupError.message }), { status: 502, headers: { ...cors, 'Content-Type': 'application/json' } })
     }
-    const usersJson = await res.json()
-    const byEmail = Array.isArray(usersJson) ? usersJson[0] : usersJson?.users?.[0]
-    if (!byEmail?.id) {
+    if (!invitedUserId) {
       return new Response(JSON.stringify({ error: 'No user found with that email. They need to sign up first.' }), { status: 404, headers: { ...cors, 'Content-Type': 'application/json' } })
     }
 
-    if (byEmail.id === caller.id) return new Response(JSON.stringify({ error: 'You are already on the list' }), { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } })
-
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
-    const { error: insertError } = await supabaseAdmin.from('list_members').insert({ list_id, user_id: byEmail.id, role: 'member' })
+    if (invitedUserId === caller.id) return new Response(JSON.stringify({ error: 'You are already on the list' }), { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } })
+    const { error: insertError } = await supabaseAdmin.from('list_members').insert({ list_id, user_id: invitedUserId, role: 'member' })
     if (insertError) {
       if (insertError.code === '23505') return new Response(JSON.stringify({ error: 'User is already a member' }), { status: 409, headers: { ...cors, 'Content-Type': 'application/json' } })
       return new Response(JSON.stringify({ error: insertError.message }), { status: 500, headers: { ...cors, 'Content-Type': 'application/json' } })
