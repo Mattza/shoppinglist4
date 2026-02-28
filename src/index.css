@@ -1,14 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;500;600;700&family=Rubik:wght@300;400;500;600;700&display=swap');
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 @theme {
   --color-primary: #0891B2;
   --color-secondary: #22D3EE;
   --color-cta: #22C55E;
-  --color-background: #ECFEFF;
+  --color-background: #F4F7FB;
   --color-surface: #ffffff;
   --color-text: #164E63;
   --color-text-muted: #0e7490;
