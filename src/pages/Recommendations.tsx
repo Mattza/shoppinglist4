@@ -21,13 +21,14 @@ async function fetchRecommendations(listId: string, accessToken: string): Promis
 }
 
 export default function Recommendations() {
-  const { listId } = useParams<{ listId: string }>()
+  const { listSlug } = useParams<{ listSlug: string }>()
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const [feedbackBySuggestion, setFeedbackBySuggestion] = useState<Record<string, string>>({})
   const [submittingFeedback, setSubmittingFeedback] = useState<string | null>(null)
 
-  const { data: list } = useCurrentList(listId ?? undefined)
+  const { data: list } = useCurrentList(listSlug ?? undefined)
+  const listId = list?.id
   const { data: profile } = useQuery({
     queryKey: ['recommendation_profile', listId, user?.id],
     queryFn: async () => {

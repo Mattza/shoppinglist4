@@ -27,8 +27,8 @@ export default function App() {
           }
         >
           <Route index element={<Lists />} />
-          <Route path="list/:listId" element={<ListView />} />
-          <Route path="list/:listId/recommendations" element={<Recommendations />} />
+          <Route path="list/:listSlug" element={<ListView />} />
+          <Route path="list/:listSlug/recommendations" element={<Recommendations />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

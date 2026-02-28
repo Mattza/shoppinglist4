@@ -30,7 +30,7 @@ async function fetchItems(listId: string) {
 }
 
 export default function ListView() {
-  const { listId } = useParams<{ listId: string }>();
+  const { listSlug } = useParams<{ listSlug: string }>();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [newItemName, setNewItemName] = useState("");
@@ -42,7 +42,8 @@ export default function ListView() {
     text: string;
   } | null>(null);
 
-  const { data: list } = useCurrentList(listId ?? undefined);
+  const { data: list } = useCurrentList(listSlug ?? undefined);
+  const listId = list?.id;
   const { data: categories = [] } = useQuery({
     queryKey: ["categories", listId],
     queryFn: () => fetchCategories(listId!),
@@ -460,7 +461,7 @@ export default function ListView() {
       <p className="mt-8 text-sm text-[#6b7280]">
         <Link
           className="font-semibold text-[#2563eb] hover:underline"
-          to={`/list/${listId}/recommendations`}
+          to={`/list/${list?.slug}/recommendations`}
         >
           Rekommendationer
         </Link>{" "}

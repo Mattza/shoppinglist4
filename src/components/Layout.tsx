@@ -4,13 +4,13 @@ import { supabase } from '@/lib/supabase'
 import { useLists } from '@/hooks/useLists'
 import { useCurrentList } from '@/hooks/useCurrentList'
 export default function Layout() {
-  const { listId } = useParams()
+  const { listSlug } = useParams()
   const [menuOpen, setMenuOpen] = useState(false)
   const [listsOpen, setListsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const listsRef = useRef<HTMLDivElement>(null)
   const { data: lists = [] } = useLists()
-  const { data: currentList } = useCurrentList(listId ?? undefined)
+  const { data: currentList } = useCurrentList(listSlug ?? undefined)
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -59,7 +59,7 @@ export default function Layout() {
                   {lists.map((list) => (
                     <Link
                       key={list.id}
-                      to={`/list/${list.id}`}
+                      to={`/list/${list.slug}`}
                       className="block px-4 py-2 text-sm text-[#374151] hover:bg-gray-50"
                       role="menuitem"
                       onClick={() => setListsOpen(false)}
@@ -70,9 +70,9 @@ export default function Layout() {
                 </div>
               )}
             </div>
-            {listId && (
+            {listSlug && (
               <Link
-                to={`/list/${listId}`}
+                to={`/list/${listSlug}`}
                 className="text-sm font-medium text-[#2563eb] hover:underline"
               >
                 Handla
@@ -80,14 +80,14 @@ export default function Layout() {
             )}
           </div>
 
-          {listId && currentList && (
+          {listSlug && currentList && (
             <h1 className="absolute left-1/2 -translate-x-1/2 text-2xl font-bold text-[#1f2937]">
               {currentList.name}
             </h1>
           )}
 
           <div className="flex items-center gap-2">
-            {listId && (
+            {listSlug && (
               <Link
                 to="/"
                 className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100"
@@ -114,10 +114,10 @@ export default function Layout() {
                   className="absolute right-0 mt-2 w-44 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
                   role="menu"
                 >
-                  {listId && (
+                  {listSlug && (
                     <>
                       <Link
-                        to={`/list/${listId}`}
+                        to={`/list/${listSlug}`}
                         className="block w-full rounded-md px-3 py-2 text-left text-sm text-[#374151] hover:bg-gray-50"
                         role="menuitem"
                         onClick={() => setMenuOpen(false)}
@@ -125,7 +125,7 @@ export default function Layout() {
                         Lista
                       </Link>
                       <Link
-                        to={`/list/${listId}/recommendations`}
+                        to={`/list/${listSlug}/recommendations`}
                         className="block w-full rounded-md px-3 py-2 text-left text-sm text-[#374151] hover:bg-gray-50"
                         role="menuitem"
                         onClick={() => setMenuOpen(false)}

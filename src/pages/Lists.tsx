@@ -21,12 +21,14 @@ export default function Lists() {
       const { data, error } = await supabase
         .from('lists')
         .insert({ name, owner_id: user.id })
+        .select('id, slug')
+        .single()
       if (error) throw error
       return data
     },
-    onSuccess: (id) => {
+    onSuccess: (row) => {
       queryClient.invalidateQueries({ queryKey: ['lists'] })
-      navigate(`/list/${id}`)
+      if (row?.slug) navigate(`/list/${row.slug}`)
     },
   })
 
@@ -83,7 +85,7 @@ export default function Lists() {
             <button
               type="button"
               className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-left shadow-sm transition hover:border-primary hover:shadow-md"
-              onClick={() => navigate(`/list/${list.id}`)}
+              onClick={() => navigate(`/list/${list.slug}`)}
             >
               <span className="font-semibold text-text truncate">
                 {list.name}
