@@ -1,0 +1,16 @@
+# Edge Function: gateway skips JWT verification (avoids 401 Invalid JWT with ES256).
+# We still validate the user inside each function via supabase.auth.getUser(token).
+[functions.reorder-list-by-ai]
+verify_jwt = false
+
+[functions.invite-by-email]
+verify_jwt = false
+
+[functions.categorize-items]
+verify_jwt = false
+
+[functions.get-recommendations]
+verify_jwt = false
+
+[functions.update-recommendation-profile]
+verify_jwt = false
