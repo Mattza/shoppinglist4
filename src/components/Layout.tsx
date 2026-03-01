@@ -27,7 +27,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-[#F4F7FB]">
-      <header className="border-b border-gray-200/80 bg-white/90 backdrop-blur">
+      <header className="relative z-50 border-b border-gray-200/80 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-4">
           <div className="flex items-center gap-4">
             <div className="relative" ref={listsRef}>
@@ -70,14 +70,7 @@ export default function Layout() {
                 </div>
               )}
             </div>
-            {listSlug && (
-              <Link
-                to={`/list/${listSlug}`}
-                className="text-sm font-medium text-[#2563eb] hover:underline"
-              >
-                Handla
-              </Link>
-            )}
+           
           </div>
 
           {listSlug && currentList && (

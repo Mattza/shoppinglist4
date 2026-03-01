@@ -41,6 +41,7 @@ export default function ListView() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [editMode, setEditMode] = useState(false);
 
   const { data: list } = useCurrentList(listSlug ?? undefined);
   const listId = list?.id;
@@ -166,7 +167,8 @@ export default function ListView() {
         throw new Error("Du kan inte ta bort sista kategorin.");
       }
       const fallbackCategory = categories.find((c) => c.id !== categoryId);
-      if (!fallbackCategory) throw new Error("Ingen annan kategori att flytta varor till.");
+      if (!fallbackCategory)
+        throw new Error("Ingen annan kategori att flytta varor till.");
       const count = items.filter((i) => i.category_id === categoryId).length;
       if (count > 0) {
         const { error: updateError } = await supabase
@@ -257,19 +259,28 @@ export default function ListView() {
 
   return (
     <div className="relative mx-auto max-w-3xl space-y-8 pb-28">
-      {list?.role === "owner" && (
-        <div className="flex justify-end">
+      {list && (
+        <div className="flex justify-end gap-2">
           <Button
             variant="secondary"
-            onClick={() => {
-              setInviteOpen(true);
-              setInviteMessage(null);
-              setInviteEmail("");
-            }}
-            aria-label="Bjud in till listan"
+            onClick={() => setEditMode((e) => !e)}
+            aria-label={editMode ? "Avsluta redigering" : "Redigera lista"}
           >
-            Bjud in
+            {editMode ? "Klar" : "Redigera lista"}
           </Button>
+          {list.role === "owner" && (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setInviteOpen(true);
+                setInviteMessage(null);
+                setInviteEmail("");
+              }}
+              aria-label="Bjud in till listan"
+            >
+              Bjud in
+            </Button>
+          )}
         </div>
       )}
 
@@ -353,7 +364,7 @@ export default function ListView() {
                 <h3 className="font-display text-base font-semibold text-[#1f2937]">
                   {cat.name}
                 </h3>
-                {categories.length > 1 && (
+                {editMode && categories.length > 1 && (
                   <button
                     type="button"
                     className="text-sm text-[#6b7280] hover:text-red-700 hover:bg-red-50 rounded-md px-2 py-1 disabled:opacity-50"
@@ -418,45 +429,49 @@ export default function ListView() {
         </div>
         {categories.length === 0 && (
           <p className="text-sm text-[#6b7280]">
-            Inga kategorier än. Lägg till en nedan.
+            {editMode
+              ? "Inga kategorier än. Lägg till en nedan."
+              : "Inga kategorier än. Klicka på Redigera lista för att lägga till."}
           </p>
         )}
       </section>
 
-      {/* Lägg till kategori */}
-      <form
-        className="flex flex-col gap-3 sm:flex-row sm:items-center"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const name = (
-            e.currentTarget.elements.namedItem(
-              "newCategory"
-            ) as HTMLInputElement
-          )?.value?.trim();
-          if (name) {
-            addCategoryMutation.mutate(name);
-            (
+      {/* Lägg till kategori – visas endast i redigeringsläge */}
+      {editMode && (
+        <form
+          className="flex flex-col gap-3 sm:flex-row sm:items-center"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const name = (
               e.currentTarget.elements.namedItem(
                 "newCategory"
               ) as HTMLInputElement
-            ).value = "";
-          }
-        }}
-      >
-        <Input
-          name="newCategory"
-          placeholder="Ny kategori"
-          aria-label="Namn på ny kategori"
-          className="w-full sm:w-60 border-gray-200"
-        />
-        <button
-          type="submit"
-          disabled={addCategoryMutation.isPending}
-          className="text-sm font-medium text-[#2563eb] hover:underline disabled:opacity-50"
+            )?.value?.trim();
+            if (name) {
+              addCategoryMutation.mutate(name);
+              (
+                e.currentTarget.elements.namedItem(
+                  "newCategory"
+                ) as HTMLInputElement
+              ).value = "";
+            }
+          }}
         >
-          Lägg till kategori
-        </button>
-      </form>
+          <Input
+            name="newCategory"
+            placeholder="Ny kategori"
+            aria-label="Namn på ny kategori"
+            className="w-full sm:w-60 border-gray-200"
+          />
+          <button
+            type="submit"
+            disabled={addCategoryMutation.isPending}
+            className="text-sm font-medium text-[#2563eb] hover:underline disabled:opacity-50"
+          >
+            Lägg till kategori
+          </button>
+        </form>
+      )}
 
       <p className="mt-8 text-sm text-[#6b7280]">
         <Link
@@ -473,7 +488,7 @@ export default function ListView() {
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-4px_12px_rgba(15,23,42,0.08)] backdrop-blur-sm">
           <div className="mx-auto max-w-3xl flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
             <form
-              className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center"
+              className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-end"
               onSubmit={(e) => {
                 e.preventDefault();
                 if (newItemName.trim() && defaultCategoryId) {
@@ -488,7 +503,7 @@ export default function ListView() {
                   value={newItemName}
                   onChange={(e) => setNewItemName(e.target.value)}
                   aria-label="Namn på vara"
-                  className="border-gray-200"
+                  className="h-10 border-gray-200"
                 />
               </label>
               <button
@@ -498,7 +513,7 @@ export default function ListView() {
                   !defaultCategoryId ||
                   addItemMutation.isPending
                 }
-                className="inline-flex w-full sm:w-auto items-center justify-center rounded-lg bg-[#22c55e] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#16a34a] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex h-10 w-full sm:w-auto shrink-0 items-center justify-center rounded-lg bg-[#22c55e] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#16a34a] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {addItemMutation.isPending
                   ? "Lägger till…"
@@ -510,7 +525,7 @@ export default function ListView() {
               variant="secondary"
               disabled={aiRecategorizeLoading || items.length === 0}
               onClick={handleRecategorizeList}
-              className="shrink-0"
+              className="h-10 shrink-0"
             >
               {aiRecategorizeLoading
                 ? "Kategoriserar…"
