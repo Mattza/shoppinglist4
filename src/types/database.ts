@@ -20,6 +20,7 @@ export interface Category {
   list_id: string
   name: string
   sort_order: number
+  color?: string | null
 }
 
 export interface ListItem {

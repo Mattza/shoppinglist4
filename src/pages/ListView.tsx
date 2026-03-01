@@ -10,6 +10,32 @@ import { Input } from "@/components/Input";
 import { Card } from "@/components/Card";
 import type { Category, ListItem } from "@/types/database";
 
+// Stable color per category (hash id → palette index)
+const CATEGORY_COLORS = [
+  "#0891b2", // teal (primary)
+  "#d97706", // amber
+  "#dc2626", // red
+  "#7c3aed", // violet
+  "#059669", // emerald
+  "#0284c7", // sky
+  "#ea580c", // orange
+  "#4f46e5", // indigo
+  "#ca8a04", // yellow
+  "#be185d", // pink
+];
+
+function getCategoryColor(categoryId: string): { border: string; bg: string } {
+  let n = 0;
+  for (let i = 0; i < categoryId.length; i++) n = (n * 31 + categoryId.charCodeAt(i)) >>> 0;
+  const hex = CATEGORY_COLORS[n % CATEGORY_COLORS.length];
+  return { border: hex, bg: `${hex}18` }; // 18 = ~10% opacity in hex
+}
+
+function getEffectiveCategoryColor(cat: Category): { border: string; bg: string } {
+  const hex = cat.color ?? getCategoryColor(cat.id).border;
+  return { border: hex, bg: `${hex}18` };
+}
+
 async function fetchCategories(listId: string) {
   const { data, error } = await supabase
     .from("categories")
@@ -190,6 +216,18 @@ export default function ListView() {
     },
   });
 
+  const updateCategoryColorMutation = useMutation({
+    mutationFn: async ({ categoryId, color }: { categoryId: string; color: string | null }) => {
+      const { error } = await supabase
+        .from("categories")
+        .update({ color })
+        .eq("id", categoryId);
+      if (error) throw error;
+    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["categories", listId] }),
+  });
+
   async function handleRecategorizeList() {
     if (!listId) return;
     setAiRecategorizeLoading(true);
@@ -355,27 +393,89 @@ export default function ListView() {
           </p>
         </div>
         <div className="space-y-4">
-          {itemsByCategory.map(({ category: cat, items: catItems }) => (
+          {itemsByCategory.map(({ category: cat, items: catItems }) => {
+            const { border, bg } = getEffectiveCategoryColor(cat);
+            const currentHex = cat.color ?? getCategoryColor(cat.id).border;
+            return (
             <div
               key={cat.id}
-              className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+              className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm border-l-4"
+              style={{ borderLeftColor: border }}
             >
-              <div className="flex items-center justify-between mb-3">
+              <div
+                className="flex items-center justify-between gap-2 mb-3 -mx-4 -mt-4 px-4 py-3 rounded-t-xl flex-wrap"
+                style={{ backgroundColor: bg }}
+              >
                 <h3 className="font-display text-base font-semibold text-[#1f2937]">
                   {cat.name}
                 </h3>
-                {editMode && categories.length > 1 && (
-                  <button
-                    type="button"
-                    className="text-sm text-[#6b7280] hover:text-red-700 hover:bg-red-50 rounded-md px-2 py-1 disabled:opacity-50"
-                    onClick={() => deleteCategoryMutation.mutate(cat.id)}
-                    disabled={deleteCategoryMutation.isPending}
-                    title="Ta bort kategori (varor flyttas till annan kategori)"
-                    aria-label={`Ta bort kategorin ${cat.name}`}
-                  >
-                    Ta bort kategori
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {editMode && (
+                    <div className="flex items-center gap-1" role="group" aria-label={`Färg för ${cat.name}`}>
+                      <button
+                        type="button"
+                        className="w-6 h-6 rounded-full border-2 border-gray-300 bg-gray-100 text-[10px] font-medium text-gray-500 hover:bg-gray-200 disabled:opacity-50 shrink-0"
+                        style={{
+                          borderColor: !cat.color ? "#1f2937" : "transparent",
+                          boxShadow: !cat.color ? "0 0 0 2px #9ca3af" : undefined,
+                        }}
+                        onClick={() => updateCategoryColorMutation.mutate({ categoryId: cat.id, color: null })}
+                        disabled={updateCategoryColorMutation.isPending}
+                        title="Automatisk färg"
+                        aria-label="Automatisk färg"
+                        aria-pressed={!cat.color}
+                      >
+                        A
+                      </button>
+                      {CATEGORY_COLORS.map((hex) => (
+                        <button
+                          key={hex}
+                          type="button"
+                          className="w-6 h-6 rounded-full border-2 border-white shadow-sm hover:scale-110 transition-transform disabled:opacity-50 shrink-0"
+                          style={{
+                            backgroundColor: hex,
+                            borderColor: currentHex === hex ? "#1f2937" : "transparent",
+                            boxShadow: currentHex === hex ? `0 0 0 2px ${hex}` : undefined,
+                          }}
+                          onClick={() => updateCategoryColorMutation.mutate({ categoryId: cat.id, color: hex })}
+                          disabled={updateCategoryColorMutation.isPending}
+                          title={hex}
+                          aria-label={`Välj färg ${hex}`}
+                          aria-pressed={currentHex === hex}
+                        />
+                      ))}
+                      <label className="cursor-pointer shrink-0 flex items-center gap-1">
+                        <span className="sr-only">Välj egen färg (hex)</span>
+                        <input
+                          type="color"
+                          className="w-6 h-6 rounded-full border-2 border-white shadow-sm cursor-pointer disabled:opacity-50 p-0 overflow-hidden"
+                          value={currentHex}
+                          onChange={(e) =>
+                            updateCategoryColorMutation.mutate({
+                              categoryId: cat.id,
+                              color: e.target.value.toLowerCase(),
+                            })
+                          }
+                          disabled={updateCategoryColorMutation.isPending}
+                          title="Välj egen färg"
+                          aria-label="Välj egen färg"
+                        />
+                      </label>
+                    </div>
+                  )}
+                  {editMode && categories.length > 1 && (
+                    <button
+                      type="button"
+                      className="text-sm text-[#6b7280] hover:text-red-700 hover:bg-red-50 rounded-md px-2 py-1 disabled:opacity-50"
+                      onClick={() => deleteCategoryMutation.mutate(cat.id)}
+                      disabled={deleteCategoryMutation.isPending}
+                      title="Ta bort kategori (varor flyttas till annan kategori)"
+                      aria-label={`Ta bort kategorin ${cat.name}`}
+                    >
+                      Ta bort kategori
+                    </button>
+                  )}
+                </div>
               </div>
               <ul
                 aria-label={`Varor i ${cat.name}`}
@@ -425,7 +525,8 @@ export default function ListView() {
                 ))}
               </ul>
             </div>
-          ))}
+            );
+          })}
         </div>
         {categories.length === 0 && (
           <p className="text-sm text-[#6b7280]">

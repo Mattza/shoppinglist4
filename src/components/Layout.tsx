@@ -1,10 +1,25 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, Link, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/hooks/useAuth'
 import { useLists } from '@/hooks/useLists'
 import { useCurrentList } from '@/hooks/useCurrentList'
+
+function getInitials(user: { user_metadata?: { full_name?: string; name?: string }; email?: string } | null | undefined): string {
+  if (!user) return '?'
+  const name = user.user_metadata?.full_name ?? user.user_metadata?.name
+  if (name) {
+    const parts = name.trim().split(/\s+/)
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+    if (parts[0]) return parts[0].slice(0, 2).toUpperCase()
+  }
+  if (user.email) return user.email[0].toUpperCase()
+  return '?'
+}
+
 export default function Layout() {
   const { listSlug } = useParams()
+  const { user } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const [listsOpen, setListsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -70,7 +85,14 @@ export default function Layout() {
                 </div>
               )}
             </div>
-           
+            {listSlug && (
+              <Link
+                to={`/list/${listSlug}`}
+                className="text-sm font-medium text-[#2563eb] hover:underline"
+              >
+                Handla
+              </Link>
+            )}
           </div>
 
           {listSlug && currentList && (
@@ -79,28 +101,25 @@ export default function Layout() {
             </h1>
           )}
 
-          <div className="flex items-center gap-2">
-            {listSlug && (
-              <Link
-                to="/"
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100"
-                aria-label="Stäng och gå till Mina listor"
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </Link>
-            )}
+          <div className="flex items-center justify-end">
             <div className="relative" ref={menuRef}>
               <button
                 type="button"
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100"
+                className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-gray-400 bg-gray-100 text-sm font-semibold text-gray-600 shadow-sm hover:border-gray-500 hover:bg-gray-200"
                 onClick={() => setMenuOpen((o) => !o)}
                 aria-expanded={menuOpen}
                 aria-haspopup="true"
                 aria-label="Öppna meny"
               >
-                ⋯
+                {user?.user_metadata?.avatar_url ? (
+                  <img
+                    src={user.user_metadata.avatar_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  getInitials(user)
+                )}
               </button>
               {menuOpen && (
                 <div
