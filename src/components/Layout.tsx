@@ -1,44 +1,77 @@
-import { useState, useRef, useEffect } from 'react'
-import { Outlet, Link, useParams } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/hooks/useAuth'
-import { useLists } from '@/hooks/useLists'
-import { useCurrentList } from '@/hooks/useCurrentList'
+import { useState, useRef, useEffect } from "react";
+import { Outlet, Link, useParams, useLocation, useNavigate } from "react-router-dom";
 
-function getInitials(user: { user_metadata?: { full_name?: string; name?: string }; email?: string } | null | undefined): string {
-  if (!user) return '?'
-  const name = user.user_metadata?.full_name ?? user.user_metadata?.name
+const LAST_PATH_KEY = "shoppinglist4_last_path";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import { useLists } from "@/hooks/useLists";
+import { useCurrentList } from "@/hooks/useCurrentList";
+
+function getInitials(
+  user:
+    | { user_metadata?: { full_name?: string; name?: string }; email?: string }
+    | null
+    | undefined
+): string {
+  if (!user) return "?";
+  const name = user.user_metadata?.full_name ?? user.user_metadata?.name;
   if (name) {
-    const parts = name.trim().split(/\s+/)
-    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
-    if (parts[0]) return parts[0].slice(0, 2).toUpperCase()
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    if (parts[0]) return parts[0].slice(0, 2).toUpperCase();
   }
-  if (user.email) return user.email[0].toUpperCase()
-  return '?'
+  if (user.email) return user.email[0].toUpperCase();
+  return "?";
 }
 
 export default function Layout() {
-  const { listSlug } = useParams()
-  const { user } = useAuth()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [listsOpen, setListsOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const listsRef = useRef<HTMLDivElement>(null)
-  const { data: lists = [] } = useLists()
-  const { data: currentList } = useCurrentList(listSlug ?? undefined)
+  const { listSlug } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [listsOpen, setListsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const listsRef = useRef<HTMLDivElement>(null);
+  const { data: lists = [] } = useLists();
+  const { data: currentList } = useCurrentList(listSlug ?? undefined);
+
+  // Restore last path when landing on index
+  useEffect(() => {
+    if (location.pathname !== "/" || location.search) return;
+    try {
+      const saved = localStorage.getItem(LAST_PATH_KEY);
+      if (saved && saved !== "/" && saved !== "/login" && !saved.startsWith("/login")) {
+        navigate(saved, { replace: true });
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Persist path on navigation (skip index and login)
+  useEffect(() => {
+    if (location.pathname === "/" || location.pathname === "/login") return;
+    try {
+      const full = location.pathname + location.search;
+      localStorage.setItem(LAST_PATH_KEY, full);
+    } catch {
+      // ignore
+    }
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
+        setMenuOpen(false);
       }
       if (listsRef.current && !listsRef.current.contains(e.target as Node)) {
-        setListsOpen(false)
+        setListsOpen(false);
       }
     }
-    document.addEventListener('click', handleClickOutside)
-    return () => document.removeEventListener('click', handleClickOutside)
-  }, [])
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#F4F7FB]">
@@ -54,8 +87,19 @@ export default function Layout() {
                 aria-haspopup="true"
               >
                 Mina listor
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
                 </svg>
               </button>
               {listsOpen && (
@@ -85,14 +129,14 @@ export default function Layout() {
                 </div>
               )}
             </div>
-            {listSlug && (
+            {/* {listSlug && (
               <Link
                 to={`/list/${listSlug}`}
                 className="text-sm font-medium text-[#2563eb] hover:underline"
               >
                 Handla
               </Link>
-            )}
+            )} */}
           </div>
 
           {listSlug && currentList && (
@@ -151,8 +195,8 @@ export default function Layout() {
                     className="block w-full rounded-md px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
                     role="menuitem"
                     onClick={() => {
-                      setMenuOpen(false)
-                      supabase.auth.signOut()
+                      setMenuOpen(false);
+                      supabase.auth.signOut();
                     }}
                   >
                     Logga ut
@@ -168,5 +212,5 @@ export default function Layout() {
         <Outlet />
       </main>
     </div>
-  )
+  );
 }

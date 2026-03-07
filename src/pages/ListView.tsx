@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,12 +26,16 @@ const CATEGORY_COLORS = [
 
 function getCategoryColor(categoryId: string): { border: string; bg: string } {
   let n = 0;
-  for (let i = 0; i < categoryId.length; i++) n = (n * 31 + categoryId.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < categoryId.length; i++)
+    n = (n * 31 + categoryId.charCodeAt(i)) >>> 0;
   const hex = CATEGORY_COLORS[n % CATEGORY_COLORS.length];
   return { border: hex, bg: `${hex}18` }; // 18 = ~10% opacity in hex
 }
 
-function getEffectiveCategoryColor(cat: Category): { border: string; bg: string } {
+function getEffectiveCategoryColor(cat: Category): {
+  border: string;
+  bg: string;
+} {
   const hex = cat.color ?? getCategoryColor(cat.id).border;
   return { border: hex, bg: `${hex}18` };
 }
@@ -68,7 +72,9 @@ export default function ListView() {
     text: string;
   } | null>(null);
   const [editMode, setEditMode] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
+  const navigate = useNavigate();
   const { data: list } = useCurrentList(listSlug ?? undefined);
   const listId = list?.id;
   const { data: categories = [] } = useQuery({
@@ -217,7 +223,13 @@ export default function ListView() {
   });
 
   const updateCategoryColorMutation = useMutation({
-    mutationFn: async ({ categoryId, color }: { categoryId: string; color: string | null }) => {
+    mutationFn: async ({
+      categoryId,
+      color,
+    }: {
+      categoryId: string;
+      color: string | null;
+    }) => {
       const { error } = await supabase
         .from("categories")
         .update({ color })
@@ -226,6 +238,19 @@ export default function ListView() {
     },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["categories", listId] }),
+  });
+
+  const deleteListMutation = useMutation({
+    mutationFn: async () => {
+      if (!listId) throw new Error("Ingen lista");
+      const { error } = await supabase.from("lists").delete().eq("id", listId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+      setDeleteConfirmOpen(false);
+      navigate("/", { replace: true });
+    },
   });
 
   async function handleRecategorizeList() {
@@ -298,7 +323,7 @@ export default function ListView() {
   return (
     <div className="relative mx-auto max-w-3xl space-y-8 pb-28">
       {list && (
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 flex-wrap">
           <Button
             variant="secondary"
             onClick={() => setEditMode((e) => !e)}
@@ -307,17 +332,29 @@ export default function ListView() {
             {editMode ? "Klar" : "Redigera lista"}
           </Button>
           {list.role === "owner" && (
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setInviteOpen(true);
-                setInviteMessage(null);
-                setInviteEmail("");
-              }}
-              aria-label="Bjud in till listan"
-            >
-              Bjud in
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setInviteOpen(true);
+                  setInviteMessage(null);
+                  setInviteEmail("");
+                }}
+                aria-label="Bjud in till listan"
+              >
+                Bjud in
+              </Button>
+              {editMode && (
+                <Button
+                  variant="secondary"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700 border-red-200"
+                  aria-label="Ta bort listan"
+                >
+                  Ta bort lista
+                </Button>
+              )}
+            </>
           )}
         </div>
       )}
@@ -382,6 +419,52 @@ export default function ListView() {
           document.body
         )}
 
+      {deleteConfirmOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-list-title"
+          >
+            <Card className="w-full max-w-md space-y-4">
+              <div>
+                <h2
+                  id="delete-list-title"
+                  className="text-xl font-display font-semibold text-text"
+                >
+                  Ta bort listan?
+                </h2>
+                <p className="mt-1 text-sm text-text-muted">
+                  Listan tas bort permanent för dig och alla medlemmar. Detta
+                  kan inte ångras.
+                </p>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setDeleteConfirmOpen(false)}
+                  disabled={deleteListMutation.isPending}
+                >
+                  Avbryt
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => deleteListMutation.mutate()}
+                  disabled={deleteListMutation.isPending}
+                  className="border-red-200 text-red-800"
+                  // className="bg-red-600 text-white hover:bg-red-700 border-0"
+                >
+                  {deleteListMutation.isPending ? "Tar bort…" : "Ta bort lista"}
+                </Button>
+              </div>
+            </Card>
+          </div>,
+          document.body
+        )}
+
       {/* Categories with items – main focus */}
       <section className="space-y-4" aria-label="Kategorier och varor">
         <div>
@@ -397,134 +480,154 @@ export default function ListView() {
             const { border, bg } = getEffectiveCategoryColor(cat);
             const currentHex = cat.color ?? getCategoryColor(cat.id).border;
             return (
-            <div
-              key={cat.id}
-              className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm border-l-4"
-              style={{ borderLeftColor: border }}
-            >
               <div
-                className="flex items-center justify-between gap-2 mb-3 -mx-4 -mt-4 px-4 py-3 rounded-t-xl flex-wrap"
-                style={{ backgroundColor: bg }}
+                key={cat.id}
+                className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm border-l-4"
+                style={{ borderLeftColor: border }}
               >
-                <h3 className="font-display text-base font-semibold text-[#1f2937]">
-                  {cat.name}
-                </h3>
-                <div className="flex items-center gap-2">
-                  {editMode && (
-                    <div className="flex items-center gap-1" role="group" aria-label={`Färg för ${cat.name}`}>
-                      <button
-                        type="button"
-                        className="w-6 h-6 rounded-full border-2 border-gray-300 bg-gray-100 text-[10px] font-medium text-gray-500 hover:bg-gray-200 disabled:opacity-50 shrink-0"
-                        style={{
-                          borderColor: !cat.color ? "#1f2937" : "transparent",
-                          boxShadow: !cat.color ? "0 0 0 2px #9ca3af" : undefined,
-                        }}
-                        onClick={() => updateCategoryColorMutation.mutate({ categoryId: cat.id, color: null })}
-                        disabled={updateCategoryColorMutation.isPending}
-                        title="Automatisk färg"
-                        aria-label="Automatisk färg"
-                        aria-pressed={!cat.color}
+                <div
+                  className="flex items-center justify-between gap-2 mb-3 -mx-4 -mt-4 px-4 py-3 rounded-t-xl flex-wrap"
+                  style={{ backgroundColor: bg }}
+                >
+                  <h3 className="font-display text-base font-semibold text-[#1f2937]">
+                    {cat.name}
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    {editMode && (
+                      <div
+                        className="flex items-center gap-1"
+                        role="group"
+                        aria-label={`Färg för ${cat.name}`}
                       >
-                        A
-                      </button>
-                      {CATEGORY_COLORS.map((hex) => (
                         <button
-                          key={hex}
                           type="button"
-                          className="w-6 h-6 rounded-full border-2 border-white shadow-sm hover:scale-110 transition-transform disabled:opacity-50 shrink-0"
+                          className="w-6 h-6 rounded-full border-2 border-gray-300 bg-gray-100 text-[10px] font-medium text-gray-500 hover:bg-gray-200 disabled:opacity-50 shrink-0"
                           style={{
-                            backgroundColor: hex,
-                            borderColor: currentHex === hex ? "#1f2937" : "transparent",
-                            boxShadow: currentHex === hex ? `0 0 0 2px ${hex}` : undefined,
+                            borderColor: !cat.color ? "#1f2937" : "transparent",
+                            boxShadow: !cat.color
+                              ? "0 0 0 2px #9ca3af"
+                              : undefined,
                           }}
-                          onClick={() => updateCategoryColorMutation.mutate({ categoryId: cat.id, color: hex })}
-                          disabled={updateCategoryColorMutation.isPending}
-                          title={hex}
-                          aria-label={`Välj färg ${hex}`}
-                          aria-pressed={currentHex === hex}
-                        />
-                      ))}
-                      <label className="cursor-pointer shrink-0 flex items-center gap-1">
-                        <span className="sr-only">Välj egen färg (hex)</span>
-                        <input
-                          type="color"
-                          className="w-6 h-6 rounded-full border-2 border-white shadow-sm cursor-pointer disabled:opacity-50 p-0 overflow-hidden"
-                          value={currentHex}
-                          onChange={(e) =>
+                          onClick={() =>
                             updateCategoryColorMutation.mutate({
                               categoryId: cat.id,
-                              color: e.target.value.toLowerCase(),
+                              color: null,
                             })
                           }
                           disabled={updateCategoryColorMutation.isPending}
-                          title="Välj egen färg"
-                          aria-label="Välj egen färg"
-                        />
-                      </label>
-                    </div>
-                  )}
-                  {editMode && categories.length > 1 && (
-                    <button
-                      type="button"
-                      className="text-sm text-[#6b7280] hover:text-red-700 hover:bg-red-50 rounded-md px-2 py-1 disabled:opacity-50"
-                      onClick={() => deleteCategoryMutation.mutate(cat.id)}
-                      disabled={deleteCategoryMutation.isPending}
-                      title="Ta bort kategori (varor flyttas till annan kategori)"
-                      aria-label={`Ta bort kategorin ${cat.name}`}
-                    >
-                      Ta bort kategori
-                    </button>
-                  )}
-                </div>
-              </div>
-              <ul
-                aria-label={`Varor i ${cat.name}`}
-                className="divide-y divide-gray-100"
-              >
-                {catItems.map((item) => (
-                  <li
-                    key={item.id}
-                    className="flex items-center justify-between gap-3 py-2"
-                  >
-                    <span className="font-medium text-[#374151]">
-                      {item.name}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <select
-                        className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-[#374151]"
-                        value={item.category_id}
-                        onChange={(e) => {
-                          const categoryId = e.target.value;
-                          if (categoryId && categoryId !== item.category_id) {
-                            updateItemCategoryMutation.mutate({
-                              itemId: item.id,
-                              categoryId,
-                            });
-                          }
-                        }}
-                        aria-label={`Kategori för ${item.name}`}
-                        disabled={updateItemCategoryMutation.isPending}
-                      >
-                        {categories.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
+                          title="Automatisk färg"
+                          aria-label="Automatisk färg"
+                          aria-pressed={!cat.color}
+                        >
+                          A
+                        </button>
+                        {CATEGORY_COLORS.map((hex) => (
+                          <button
+                            key={hex}
+                            type="button"
+                            className="w-6 h-6 rounded-full border-2 border-white shadow-sm hover:scale-110 transition-transform disabled:opacity-50 shrink-0"
+                            style={{
+                              backgroundColor: hex,
+                              borderColor:
+                                currentHex === hex ? "#1f2937" : "transparent",
+                              boxShadow:
+                                currentHex === hex
+                                  ? `0 0 0 2px ${hex}`
+                                  : undefined,
+                            }}
+                            onClick={() =>
+                              updateCategoryColorMutation.mutate({
+                                categoryId: cat.id,
+                                color: hex,
+                              })
+                            }
+                            disabled={updateCategoryColorMutation.isPending}
+                            title={hex}
+                            aria-label={`Välj färg ${hex}`}
+                            aria-pressed={currentHex === hex}
+                          />
                         ))}
-                      </select>
-                      <Button
+                        <label className="cursor-pointer shrink-0 flex items-center gap-1">
+                          <span className="sr-only">Välj egen färg (hex)</span>
+                          <input
+                            type="color"
+                            className="w-6 h-6 rounded-full border-2 border-white shadow-sm cursor-pointer disabled:opacity-50 p-0 overflow-hidden"
+                            value={currentHex}
+                            onChange={(e) =>
+                              updateCategoryColorMutation.mutate({
+                                categoryId: cat.id,
+                                color: e.target.value.toLowerCase(),
+                              })
+                            }
+                            disabled={updateCategoryColorMutation.isPending}
+                            title="Välj egen färg"
+                            aria-label="Välj egen färg"
+                          />
+                        </label>
+                      </div>
+                    )}
+                    {editMode && categories.length > 1 && (
+                      <button
                         type="button"
-                        variant="ghost"
-                        onClick={() => removeItemMutation.mutate(item)}
-                        title="Ta bort (sparas i arkiv)"
-                        aria-label={`Ta bort ${item.name}`}
+                        className="text-sm text-[#6b7280] hover:text-red-700 hover:bg-red-50 rounded-md px-2 py-1 disabled:opacity-50"
+                        onClick={() => deleteCategoryMutation.mutate(cat.id)}
+                        disabled={deleteCategoryMutation.isPending}
+                        title="Ta bort kategori (varor flyttas till annan kategori)"
+                        aria-label={`Ta bort kategorin ${cat.name}`}
                       >
-                        Ta bort
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
+                        Ta bort kategori
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <ul
+                  aria-label={`Varor i ${cat.name}`}
+                  className="divide-y divide-gray-100"
+                >
+                  {catItems.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-center justify-between gap-3 py-2"
+                    >
+                      <span className="font-medium text-[#374151]">
+                        {item.name}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <select
+                          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-[#374151]"
+                          value={item.category_id}
+                          onChange={(e) => {
+                            const categoryId = e.target.value;
+                            if (categoryId && categoryId !== item.category_id) {
+                              updateItemCategoryMutation.mutate({
+                                itemId: item.id,
+                                categoryId,
+                              });
+                            }
+                          }}
+                          aria-label={`Kategori för ${item.name}`}
+                          disabled={updateItemCategoryMutation.isPending}
+                        >
+                          {categories.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => removeItemMutation.mutate(item)}
+                          title="Ta bort (sparas i arkiv)"
+                          aria-label={`Ta bort ${item.name}`}
+                        >
+                          Ta bort
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             );
           })}
         </div>

@@ -18,13 +18,9 @@ export default function Lists() {
   const createMutation = useMutation({
     mutationFn: async (name: string) => {
       if (!user?.id) throw new Error('Du måste vara inloggad')
-      const { data, error } = await supabase
-        .from('lists')
-        .insert({ name, owner_id: user.id })
-        .select('id, slug')
-        .single()
+      const { data, error } = await supabase.rpc('create_list', { p_name: name })
       if (error) throw error
-      return data
+      return data as { id: string; slug: string }
     },
     onSuccess: (row) => {
       queryClient.invalidateQueries({ queryKey: ['lists'] })
