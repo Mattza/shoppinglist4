@@ -50,13 +50,17 @@ async function fetchCategories(listId: string) {
   return (data ?? []) as Category[];
 }
 
-async function fetchItems(listId: string) {
+type ListItemWithCategory = ListItem & {
+  category: { name: string } | null;
+};
+
+async function fetchItems(listId: string): Promise<ListItemWithCategory[]> {
   const { data, error } = await supabase
     .from("list_items")
     .select("*, category:categories(name)")
     .eq("list_id", listId);
   if (error) throw error;
-  return (data ?? []) as (ListItem & { category: { name: string } | null })[];
+  return (data ?? []) as ListItemWithCategory[];
 }
 
 export default function ListView() {
@@ -73,23 +77,41 @@ export default function ListView() {
   } | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [addBarCategoryId, setAddBarCategoryId] = useState("");
 
   const navigate = useNavigate();
-  const { data: list } = useCurrentList(listSlug ?? undefined);
+  const {
+    data: list,
+    isPending: listPending,
+    isFetched: listFetched,
+  } = useCurrentList(listSlug ?? undefined);
   const listId = list?.id;
-  const { data: categories = [] } = useQuery({
+  const {
+    data: categories = [],
+    isPending: categoriesPending,
+  } = useQuery({
     queryKey: ["categories", listId],
     queryFn: () => fetchCategories(listId!),
     enabled: !!listId,
   });
-  const { data: items = [] } = useQuery({
+  const {
+    data: items = [],
+    isPending: itemsPending,
+  } = useQuery({
     queryKey: ["list_items", listId],
     queryFn: () => fetchItems(listId!),
     enabled: !!listId,
   });
 
+  const isChangingList =
+    !!listSlug &&
+    (listPending || (!!listId && (categoriesPending || itemsPending)));
+  const listNotFound = !!listSlug && listFetched && !listPending && !list;
+
   const defaultCategoryId =
     categories.find((c) => c.name === "Övrigt")?.id ?? categories[0]?.id ?? "";
+
+  const selectedAddCategoryId = addBarCategoryId || defaultCategoryId;
 
   useEffect(() => {
     if (!listId) return;
@@ -126,41 +148,62 @@ export default function ListView() {
   }, [listId, queryClient]);
 
   const addItemMutation = useMutation({
-    mutationFn: async (name: string) => {
-      if (!listId || !defaultCategoryId)
-        throw new Error("Ingen standardkategori tillgänglig");
-      const { error } = await supabase.from("list_items").insert({
-        list_id: listId,
-        category_id: defaultCategoryId,
-        name,
-        created_by: user?.id,
-      });
+    mutationFn: async ({
+      name,
+      categoryId,
+    }: {
+      name: string;
+      categoryId: string;
+    }) => {
+      if (!listId || !categoryId) throw new Error("Ingen kategori vald");
+      const { data, error } = await supabase
+        .from("list_items")
+        .insert({
+          list_id: listId,
+          category_id: categoryId,
+          name,
+          created_by: user?.id,
+        })
+        .select("*, category:categories(name)")
+        .single();
       if (error) throw error;
+      return data as ListItemWithCategory;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["list_items", listId] });
+    onSuccess: (newItem) => {
+      if (!listId) return;
+      queryClient.setQueryData<ListItemWithCategory[]>(
+        ["list_items", listId],
+        (old) => [...(old ?? []), newItem]
+      );
       setNewItemName("");
     },
   });
 
   const removeItemMutation = useMutation({
-    mutationFn: async (
-      item: ListItem & { category?: { name: string } | null }
-    ) => {
-      await supabase.from("archived_items").insert({
-        list_id: listId!,
-        user_id: user!.id,
-        name: item.name,
-        category_name: item.category?.name ?? null,
-      });
+    mutationFn: async (item: ListItemWithCategory) => {
       const { error } = await supabase
         .from("list_items")
         .delete()
         .eq("id", item.id);
       if (error) throw error;
+      // Archive in background – don't block UI
+      supabase
+        .from("archived_items")
+        .insert({
+          list_id: listId!,
+          user_id: user!.id,
+          name: item.name,
+          category_name: item.category?.name ?? null,
+        })
+        .then(() => {});
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["list_items", listId] }),
+    onSuccess: (_, item) => {
+      if (!listId) return;
+      queryClient.setQueryData<ListItemWithCategory[]>(
+        ["list_items", listId],
+        (old) => (old ?? []).filter((i) => i.id !== item.id)
+      );
+    },
   });
 
   const updateItemCategoryMutation = useMutation({
@@ -177,20 +220,44 @@ export default function ListView() {
         .eq("id", itemId);
       if (error) throw error;
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["list_items", listId] }),
+    onSuccess: (_, { itemId, categoryId }) => {
+      if (!listId) return;
+      const categoryName =
+        categories.find((c) => c.id === categoryId)?.name ?? null;
+      queryClient.setQueryData<ListItemWithCategory[]>(
+        ["list_items", listId],
+        (old) =>
+          (old ?? []).map((i) =>
+            i.id === itemId
+              ? {
+                  ...i,
+                  category_id: categoryId,
+                  category: categoryName ? { name: categoryName } : null,
+                }
+              : i
+          )
+      );
+    },
   });
 
   const addCategoryMutation = useMutation({
     mutationFn: async (name: string) => {
       const maxOrder = Math.max(0, ...categories.map((c) => c.sort_order));
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("categories")
-        .insert({ list_id: listId!, name, sort_order: maxOrder + 1 });
+        .insert({ list_id: listId!, name, sort_order: maxOrder + 1 })
+        .select()
+        .single();
       if (error) throw error;
+      return data as Category;
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["categories", listId] }),
+    onSuccess: (newCategory) => {
+      if (!listId) return;
+      queryClient.setQueryData<Category[]>(["categories", listId], (old) => [
+        ...(old ?? []),
+        newCategory,
+      ]);
+    },
   });
 
   const deleteCategoryMutation = useMutation({
@@ -216,9 +283,25 @@ export default function ListView() {
         .eq("id", categoryId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories", listId] });
-      queryClient.invalidateQueries({ queryKey: ["list_items", listId] });
+    onSuccess: (_, categoryId) => {
+      if (!listId) return;
+      const fallbackCategory = categories.find((c) => c.id !== categoryId)!;
+      queryClient.setQueryData<Category[]>(["categories", listId], (old) =>
+        (old ?? []).filter((c) => c.id !== categoryId)
+      );
+      queryClient.setQueryData<ListItemWithCategory[]>(
+        ["list_items", listId],
+        (old) =>
+          (old ?? []).map((i) =>
+            i.category_id === categoryId
+              ? {
+                  ...i,
+                  category_id: fallbackCategory.id,
+                  category: { name: fallbackCategory.name },
+                }
+              : i
+          )
+      );
     },
   });
 
@@ -236,8 +319,68 @@ export default function ListView() {
         .eq("id", categoryId);
       if (error) throw error;
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["categories", listId] }),
+    onSuccess: (_, { categoryId, color }) => {
+      if (!listId) return;
+      queryClient.setQueryData<Category[]>(["categories", listId], (old) =>
+        (old ?? []).map((c) => (c.id === categoryId ? { ...c, color } : c))
+      );
+    },
+  });
+
+  const reorderCategoryMutation = useMutation({
+    mutationFn: async ({
+      categoryId,
+      direction,
+    }: {
+      categoryId: string;
+      direction: "up" | "down";
+    }) => {
+      if (!listId) throw new Error("Ingen lista");
+      const current =
+        queryClient.getQueryData<Category[]>(["categories", listId]) ?? [];
+      const idx = current.findIndex((c) => c.id === categoryId);
+      if (idx === -1) throw new Error("Kategorin hittades inte");
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= current.length)
+        throw new Error("Kan inte flytta längre");
+      const cat = current[idx];
+      const other = current[swapIdx];
+      const { error: err1 } = await supabase
+        .from("categories")
+        .update({ sort_order: other.sort_order })
+        .eq("id", cat.id);
+      if (err1) throw err1;
+      const { error: err2 } = await supabase
+        .from("categories")
+        .update({ sort_order: cat.sort_order })
+        .eq("id", other.id);
+      if (err2) throw err2;
+    },
+    onMutate: async ({ categoryId, direction }) => {
+      if (!listId) return;
+      await queryClient.cancelQueries({ queryKey: ["categories", listId] });
+      const previous = queryClient.getQueryData<Category[]>([
+        "categories",
+        listId,
+      ]);
+      const current = previous ?? [];
+      const idx = current.findIndex((c) => c.id === categoryId);
+      if (idx === -1 || idx < 0) return;
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= current.length) return;
+      const next = [...current];
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      queryClient.setQueryData<Category[]>(["categories", listId], next);
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous != null && listId)
+        queryClient.setQueryData(["categories", listId], context.previous);
+    },
+    onSettled: () => {
+      if (listId)
+        queryClient.invalidateQueries({ queryKey: ["categories", listId] });
+    },
   });
 
   const deleteListMutation = useMutation({
@@ -279,10 +422,53 @@ export default function ListView() {
     }
   }
 
-  const itemsByCategory = categories.map((cat) => ({
-    category: cat,
-    items: items.filter((i) => i.category_id === cat.id),
-  }));
+  const itemsByCategory = [...categories]
+    .map((cat) => ({
+      category: cat,
+      items: items.filter((i) => i.category_id === cat.id),
+    }))
+    .sort((a, b) => {
+      const aEmpty = a.items.length === 0;
+      const bEmpty = b.items.length === 0;
+      if (aEmpty !== bEmpty) return aEmpty ? 1 : -1;
+      return a.category.sort_order - b.category.sort_order;
+    });
+
+  if (listNotFound) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <p className="text-lg font-medium text-[#374151]">
+          Listan hittades inte
+        </p>
+        <p className="mt-1 text-sm text-[#6b7280]">
+          Den kan ha tagits bort eller så har du inte åtkomst.
+        </p>
+        <Link
+          to="/"
+          className="mt-6 inline-flex items-center justify-center rounded-lg bg-[#0891b2] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#0e7490]"
+        >
+          Till Mina listor
+        </Link>
+      </div>
+    );
+  }
+
+  if (isChangingList) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24">
+        <div
+          className="h-10 w-10 animate-spin rounded-full border-2 border-[#0891b2] border-t-transparent"
+          aria-hidden
+        />
+        <p className="mt-4 text-sm font-medium text-[#374151]">
+          Laddar lista…
+        </p>
+        <p className="mt-1 text-xs text-[#6b7280]">
+          Varor och kategorier hämtas
+        </p>
+      </div>
+    );
+  }
 
   async function handleInviteSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -324,6 +510,13 @@ export default function ListView() {
     <div className="relative mx-auto max-w-3xl space-y-8 pb-28">
       {list && (
         <div className="flex justify-end gap-2 flex-wrap">
+          <Button
+            disabled={aiRecategorizeLoading || items.length === 0}
+            onClick={handleRecategorizeList}
+            aria-label="Kategorisera listan"
+          >
+            {aiRecategorizeLoading ? "Kategoriserar…" : "Kategorisera listan"}
+          </Button>
           <Button
             variant="secondary"
             onClick={() => setEditMode((e) => !e)}
@@ -476,26 +669,124 @@ export default function ListView() {
           </p>
         </div>
         <div className="space-y-4">
-          {itemsByCategory.map(({ category: cat, items: catItems }) => {
+          {itemsByCategory.map(({ category: cat, items: catItems }, catIndex) => {
             const { border, bg } = getEffectiveCategoryColor(cat);
             const currentHex = cat.color ?? getCategoryColor(cat.id).border;
+            const isEmpty = catItems.length === 0;
+            const canMoveUp = editMode && catIndex > 0;
+            const canMoveDown =
+              editMode && catIndex < itemsByCategory.length - 1;
             return (
               <div
                 key={cat.id}
-                className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm border-l-4"
-                style={{ borderLeftColor: border }}
+                className={`flex rounded-xl border border-gray-200 border-l-0 bg-white shadow-sm overflow-hidden ${isEmpty ? "shadow-none" : ""}`}
               >
                 <div
-                  className="flex items-center justify-between gap-2 mb-3 -mx-4 -mt-4 px-4 py-3 rounded-t-xl flex-wrap"
-                  style={{ backgroundColor: bg }}
+                  className="w-1 shrink-0 rounded-l-xl"
+                  style={{ backgroundColor: border }}
+                  aria-hidden
+                />
+                <div
+                  className={`flex-1 min-w-0 ${isEmpty ? "p-2" : "p-4"}`}
                 >
-                  <h3 className="font-display text-base font-semibold text-[#1f2937]">
-                    {cat.name}
-                  </h3>
-                  <div className="flex items-center gap-2">
+                  <div
+                    className={`${isEmpty ? "-mx-2 -mt-2 px-2 py-1.5 mb-1.5 rounded-t-lg" : "mb-3 -mx-4 -mt-4 px-4 py-3"} space-y-2`}
+                    style={{ backgroundColor: bg }}
+                  >
+                    <div className="flex items-center justify-between gap-2 shrink-0">
+                      <div className="flex items-center gap-1 min-w-0">
+                        {editMode && (
+                          <div
+                            className="flex flex-col shrink-0"
+                            role="group"
+                            aria-label={`Ändra ordning för ${cat.name}`}
+                          >
+                            <button
+                              type="button"
+                              className="p-0.5 text-[#6b7280] hover:text-[#374151] hover:bg-gray-200/80 rounded disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#6b7280]"
+                              onClick={() =>
+                                reorderCategoryMutation.mutate({
+                                  categoryId: cat.id,
+                                  direction: "up",
+                                })
+                              }
+                              disabled={
+                                !canMoveUp ||
+                                reorderCategoryMutation.isPending
+                              }
+                              title="Flytta upp"
+                              aria-label={`Flytta ${cat.name} upp`}
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M5 15l7-7 7 7"
+                                />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              className="p-0.5 text-[#6b7280] hover:text-[#374151] hover:bg-gray-200/80 rounded disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#6b7280]"
+                              onClick={() =>
+                                reorderCategoryMutation.mutate({
+                                  categoryId: cat.id,
+                                  direction: "down",
+                                })
+                              }
+                              disabled={
+                                !canMoveDown ||
+                                reorderCategoryMutation.isPending
+                              }
+                              title="Flytta ner"
+                              aria-label={`Flytta ${cat.name} ner`}
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 9l-7 7-7-7"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                        <h3
+                          className={`font-display font-semibold text-[#1f2937] ${isEmpty ? "text-sm" : "text-base"}`}
+                        >
+                          {cat.name}
+                        </h3>
+                      </div>
+                      {editMode && categories.length > 1 && (
+                        <button
+                          type="button"
+                          className="text-sm text-[#6b7280] hover:text-red-700 hover:bg-red-50 rounded-md px-2 py-1 disabled:opacity-50 shrink-0"
+                          onClick={() => deleteCategoryMutation.mutate(cat.id)}
+                          disabled={deleteCategoryMutation.isPending}
+                          title="Ta bort kategori (varor flyttas till annan kategori)"
+                          aria-label={`Ta bort kategorin ${cat.name}`}
+                        >
+                          Ta bort kategori
+                        </button>
+                      )}
+                    </div>
                     {editMode && (
                       <div
-                        className="flex items-center gap-1"
+                        className="flex items-center gap-1 flex-wrap"
                         role="group"
                         aria-label={`Färg för ${cat.name}`}
                       >
@@ -503,7 +794,9 @@ export default function ListView() {
                           type="button"
                           className="w-6 h-6 rounded-full border-2 border-gray-300 bg-gray-100 text-[10px] font-medium text-gray-500 hover:bg-gray-200 disabled:opacity-50 shrink-0"
                           style={{
-                            borderColor: !cat.color ? "#1f2937" : "transparent",
+                            borderColor: !cat.color
+                              ? "#1f2937"
+                              : "transparent",
                             boxShadow: !cat.color
                               ? "0 0 0 2px #9ca3af"
                               : undefined,
@@ -529,7 +822,9 @@ export default function ListView() {
                             style={{
                               backgroundColor: hex,
                               borderColor:
-                                currentHex === hex ? "#1f2937" : "transparent",
+                                currentHex === hex
+                                  ? "#1f2937"
+                                  : "transparent",
                               boxShadow:
                                 currentHex === hex
                                   ? `0 0 0 2px ${hex}`
@@ -548,7 +843,9 @@ export default function ListView() {
                           />
                         ))}
                         <label className="cursor-pointer shrink-0 flex items-center gap-1">
-                          <span className="sr-only">Välj egen färg (hex)</span>
+                          <span className="sr-only">
+                            Välj egen färg (hex)
+                          </span>
                           <input
                             type="color"
                             className="w-6 h-6 rounded-full border-2 border-white shadow-sm cursor-pointer disabled:opacity-50 p-0 overflow-hidden"
@@ -566,67 +863,76 @@ export default function ListView() {
                         </label>
                       </div>
                     )}
-                    {editMode && categories.length > 1 && (
-                      <button
-                        type="button"
-                        className="text-sm text-[#6b7280] hover:text-red-700 hover:bg-red-50 rounded-md px-2 py-1 disabled:opacity-50"
-                        onClick={() => deleteCategoryMutation.mutate(cat.id)}
-                        disabled={deleteCategoryMutation.isPending}
-                        title="Ta bort kategori (varor flyttas till annan kategori)"
-                        aria-label={`Ta bort kategorin ${cat.name}`}
-                      >
-                        Ta bort kategori
-                      </button>
-                    )}
                   </div>
-                </div>
-                <ul
-                  aria-label={`Varor i ${cat.name}`}
-                  className="divide-y divide-gray-100"
-                >
-                  {catItems.map((item) => (
-                    <li
-                      key={item.id}
-                      className="flex items-center justify-between gap-3 py-2"
-                    >
-                      <span className="font-medium text-[#374151]">
-                        {item.name}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <select
-                          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-[#374151]"
-                          value={item.category_id}
-                          onChange={(e) => {
-                            const categoryId = e.target.value;
-                            if (categoryId && categoryId !== item.category_id) {
-                              updateItemCategoryMutation.mutate({
-                                itemId: item.id,
-                                categoryId,
-                              });
+                  <ul
+                    aria-label={`Varor i ${cat.name}`}
+                    className="divide-y divide-gray-100"
+                  >
+                    {catItems.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex items-center justify-between gap-3 py-2"
+                      >
+                        <span className="font-medium text-[#374151]">
+                          {item.name}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-[#374151] disabled:opacity-60"
+                            value={item.category_id}
+                            onChange={(e) => {
+                              const categoryId = e.target.value;
+                              if (
+                                categoryId &&
+                                categoryId !== item.category_id
+                              ) {
+                                updateItemCategoryMutation.mutate({
+                                  itemId: item.id,
+                                  categoryId,
+                                });
+                              }
+                            }}
+                            aria-label={`Kategori för ${item.name}`}
+                            disabled={
+                              updateItemCategoryMutation.isPending &&
+                              updateItemCategoryMutation.variables?.itemId ===
+                                item.id
                             }
-                          }}
-                          aria-label={`Kategori för ${item.name}`}
-                          disabled={updateItemCategoryMutation.isPending}
-                        >
-                          {categories.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => removeItemMutation.mutate(item)}
-                          title="Ta bort (sparas i arkiv)"
-                          aria-label={`Ta bort ${item.name}`}
-                        >
-                          Ta bort
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                          >
+                            {categories.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                          {updateItemCategoryMutation.isPending &&
+                            updateItemCategoryMutation.variables?.itemId ===
+                              item.id && (
+                              <span className="text-xs text-[#6b7280]">
+                                Uppdaterar…
+                              </span>
+                            )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => removeItemMutation.mutate(item)}
+                            disabled={
+                              removeItemMutation.isPending &&
+                              removeItemMutation.variables?.id === item.id
+                            }
+                            title="Ta bort (sparas i arkiv)"
+                            aria-label={`Ta bort ${item.name}`}
+                          >
+                            {removeItemMutation.isPending &&
+                            removeItemMutation.variables?.id === item.id
+                              ? "Tar bort…"
+                              : "Ta bort"}
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             );
           })}
@@ -695,46 +1001,55 @@ export default function ListView() {
               className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-end"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (newItemName.trim() && defaultCategoryId) {
-                  addItemMutation.mutate(newItemName.trim());
+                if (newItemName.trim() && selectedAddCategoryId) {
+                  addItemMutation.mutate({
+                    name: newItemName.trim(),
+                    categoryId: selectedAddCategoryId,
+                  });
                 }
               }}
             >
-              <label className="flex-1 text-sm text-[#374151]">
-                <span className="mb-1 block font-medium">Lägg till vara</span>
-                <Input
-                  placeholder="t.ex. mjölk, bröd, äpplen… (läggs i Övrigt)"
-                  value={newItemName}
-                  onChange={(e) => setNewItemName(e.target.value)}
-                  aria-label="Namn på vara"
-                  className="h-10 border-gray-200"
-                />
-              </label>
+              <div className="flex flex-1 min-w-0 gap-2 sm:contents">
+                <label className="flex-1 min-w-0 text-sm text-[#374151]">
+                  <span className="mb-1 block font-medium">Lägg till vara</span>
+                  <Input
+                    placeholder="t.ex. mjölk, bröd, äpplen…"
+                    value={newItemName}
+                    onChange={(e) => setNewItemName(e.target.value)}
+                    aria-label="Namn på vara"
+                    className="h-10 border-gray-200"
+                  />
+                </label>
+                <label className="shrink-0 text-sm text-[#374151] sm:flex sm:flex-col sm:justify-end">
+                  <span className="mb-1 block font-medium sm:mb-0 sm:sr-only">
+                    Kategori
+                  </span>
+                  <select
+                    value={selectedAddCategoryId}
+                    onChange={(e) => setAddBarCategoryId(e.target.value)}
+                    className="h-10 w-auto min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-[#374151] focus:border-[#22c55e] focus:outline-none focus:ring-1 focus:ring-[#22c55e]"
+                    aria-label="Välj kategori"
+                  >
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               <button
                 type="submit"
                 disabled={
                   !newItemName.trim() ||
-                  !defaultCategoryId ||
+                  !selectedAddCategoryId ||
                   addItemMutation.isPending
                 }
-                className="inline-flex h-10 w-full sm:w-auto shrink-0 items-center justify-center rounded-lg bg-[#22c55e] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#16a34a] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-10 w-full sm:flex-1 min-w-0 inline-flex items-center justify-center rounded-lg bg-[#22c55e] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[#16a34a] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {addItemMutation.isPending
-                  ? "Lägger till…"
-                  : "Lägg till i Övrigt"}
+                {addItemMutation.isPending ? "Lägger till…" : "Lägg till"}
               </button>
             </form>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={aiRecategorizeLoading || items.length === 0}
-              onClick={handleRecategorizeList}
-              className="h-10 shrink-0"
-            >
-              {aiRecategorizeLoading
-                ? "Kategoriserar…"
-                : "Kategorisera listan med AI"}
-            </Button>
           </div>
         </div>,
         document.body
