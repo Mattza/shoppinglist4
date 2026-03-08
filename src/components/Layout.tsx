@@ -104,7 +104,7 @@ export default function Layout() {
               </button>
               {listsOpen && (
                 <div
-                  className="absolute left-0 top-full mt-1 min-w-[180px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+                  className="absolute left-0 top-full mt-1 min-w-full w-max max-w-[min(540px,100vw)] rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
                   role="menu"
                 >
                   <Link
@@ -140,7 +140,10 @@ export default function Layout() {
           </div>
 
           {listSlug && currentList && (
-            <h1 className="absolute left-1/2 -translate-x-1/2 text-2xl font-bold text-[#1f2937]">
+            <h1
+              className="absolute left-1/2 -translate-x-1/2 max-w-[min(16rem,55vw)] truncate text-xl font-bold text-[#1f2937]"
+              title={currentList.name}
+            >
               {currentList.name}
             </h1>
           )}
