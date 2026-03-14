@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
     const archiveNames = (archived ?? []).map((a) => a.name);
     const profileText = profile?.profile_snapshot ?? "Ingen tidigare profil.";
 
-    const prompt = `Du är en inköpsassistent. Baserat på användarens tidigare borttagna/inköpta varor (arkivet) och deras rekommendationsprofil, ge 5–8 korta förslag på vad de kanske vill lägga till på sin handlarlista. Svara ENDAST med en JSON-array av strängar, inget annat. Exempel: ["Mjölk","Bröd"]. Arkiv (senaste): ${archiveNames.join(", ") || "tomt"}. Rekommendationsprofil: ${profileText}`;
+    const prompt = `Du är en inköpsassistent. Baserat på användarens tidigare borttagna/inköpta varor (arkivet) och deras rekommendationsprofil, ge upp till 20 korta förslag på vad de kanske vill lägga till på sin handlarlista. Svara ENDAST med en JSON-array av strängar, inget annat. Exempel: ["Mjölk","Bröd"]. Arkiv (senaste): ${archiveNames.join(", ") || "tomt"}. Rekommendationsprofil: ${profileText}`;
 
     const apiKey = Deno.env.get("GEMINI_API_KEY");
     if (!apiKey)

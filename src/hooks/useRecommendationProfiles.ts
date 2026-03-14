@@ -12,3 +12,22 @@ export async function getRecommendationProfile(
     .maybeSingle()
   return data?.profile_snapshot ?? null
 }
+
+export async function upsertRecommendationProfile(
+  userId: string,
+  listId: string,
+  profileSnapshot: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('recommendation_profiles')
+    .upsert(
+      {
+        user_id: userId,
+        list_id: listId,
+        profile_snapshot: profileSnapshot.trim() || null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,list_id' }
+    )
+  if (error) throw error
+}
