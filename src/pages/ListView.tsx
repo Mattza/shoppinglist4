@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { supabase, getSupabaseFunctionsUrl } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useCurrentList } from "@/hooks/useCurrentList";
 import { fetchCategories } from "@/hooks/useCategories";
@@ -410,7 +410,7 @@ export default function ListView() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reorder-list-by-ai`;
+      const url = `${getSupabaseFunctionsUrl()}/reorder-list-by-ai`;
       const res = await fetch(url, {
         method: "POST",
         headers: {
@@ -486,7 +486,7 @@ export default function ListView() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-by-email`;
+      const url = `${getSupabaseFunctionsUrl()}/invite-by-email`;
       const res = await fetch(url, {
         method: "POST",
         headers: {

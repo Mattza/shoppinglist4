@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { supabase, getSupabaseFunctionsUrl } from '@/lib/supabase'
 import { useCurrentList } from '@/hooks/useCurrentList'
 import { useAuth } from '@/hooks/useAuth'
 import { fetchCategories } from '@/hooks/useCategories'
@@ -12,7 +12,7 @@ import { Input } from '@/components/Input'
 import { Card } from '@/components/Card'
 
 async function fetchRecommendations(listId: string, accessToken: string): Promise<string[]> {
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-recommendations`
+  const url = `${getSupabaseFunctionsUrl()}/get-recommendations`
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
@@ -73,7 +73,7 @@ export default function Recommendations() {
     setSubmittingFeedback(suggestion)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-recommendation-profile`
+      const url = `${getSupabaseFunctionsUrl()}/update-recommendation-profile`
       await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
