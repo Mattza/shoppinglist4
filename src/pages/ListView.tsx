@@ -10,6 +10,7 @@ import {
   fetchListItems,
   addListItem,
   removeListItem,
+  updateListItemName,
   updateListItemCategory,
   moveListItemsToCategory,
   type ListItemWithCategory,
@@ -72,6 +73,12 @@ export default function ListView() {
   const [editMode, setEditMode] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [addBarCategoryId, setAddBarCategoryId] = useState("");
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingItemName, setEditingItemName] = useState("");
+  const [recentlyDeleted, setRecentlyDeleted] = useState<{
+    listId: string;
+    items: { name: string; categoryId: string }[];
+  } | null>(null);
 
   const navigate = useNavigate();
   const {
@@ -178,6 +185,59 @@ export default function ListView() {
         ["list_items", listId],
         (old) => (old ?? []).filter((i) => i.id !== item.id)
       );
+      setRecentlyDeleted((prev) => {
+        const next = { listId, items: [...(prev?.listId === listId ? prev.items : []), { name: item.name, categoryId: item.category_id }] };
+        return next;
+      });
+    },
+  });
+
+  const restoreRecentlyDeletedMutation = useMutation({
+    mutationFn: async (item: {
+      name: string;
+      categoryId: string;
+    }): Promise<ListItemWithCategory> => {
+      if (!listId || !user?.id) throw new Error("Ingen lista eller användare");
+      return addListItem(listId, item.categoryId, item.name, user.id);
+    },
+    onSuccess: (newItem) => {
+      if (!listId) return;
+      queryClient.setQueryData<ListItemWithCategory[]>(
+        ["list_items", listId],
+        (old) => [...(old ?? []), newItem]
+      );
+      setRecentlyDeleted((prev) => {
+        if (!prev || prev.listId !== listId || prev.items.length <= 1)
+          return null;
+        return { listId: prev.listId, items: prev.items.slice(0, -1) };
+      });
+    },
+  });
+
+  const updateItemNameMutation = useMutation({
+    mutationFn: async ({
+      itemId,
+      name,
+    }: {
+      itemId: string;
+      name: string;
+    }) => {
+      const trimmed = name.trim();
+      if (!trimmed) throw new Error("Namnet får inte vara tomt");
+      await updateListItemName(itemId, trimmed);
+    },
+    onSuccess: (_, { itemId, name }) => {
+      if (!listId) return;
+      const trimmed = name.trim();
+      queryClient.setQueryData<ListItemWithCategory[]>(
+        ["list_items", listId],
+        (old) =>
+          (old ?? []).map((i) =>
+            i.id === itemId ? { ...i, name: trimmed } : i
+          )
+      );
+      setEditingItemId(null);
+      setEditingItemName("");
     },
   });
 
@@ -605,6 +665,40 @@ export default function ListView() {
           document.body
         )}
 
+      {/* Restore recently deleted (one item per click, latest shown) */}
+      {recentlyDeleted &&
+        recentlyDeleted.listId === listId &&
+        recentlyDeleted.items.length > 0 && (() => {
+          const latest = recentlyDeleted.items[recentlyDeleted.items.length - 1];
+          return (
+            <div
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="text-sm text-amber-900">
+                Senast borttagen: <strong>{latest.name}</strong>
+                {recentlyDeleted.items.length > 1 &&
+                  ` (+${recentlyDeleted.items.length - 1} till)`}
+              </span>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() =>
+                  restoreRecentlyDeletedMutation.mutate(latest)
+                }
+                disabled={restoreRecentlyDeletedMutation.isPending}
+                className="border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                aria-label={`Återställ ${latest.name}`}
+              >
+                {restoreRecentlyDeletedMutation.isPending
+                  ? "Återställer…"
+                  : "Återställ"}
+              </Button>
+            </div>
+          );
+        })()}
+
       {/* Categories with items – main focus */}
       <section className="space-y-4" aria-label="Kategorier och varor">
         <div>
@@ -820,9 +914,62 @@ export default function ListView() {
                         key={item.id}
                         className="flex items-center justify-between gap-3 py-2"
                       >
-                        <span className="font-medium text-[#374151]">
-                          {item.name}
-                        </span>
+                        {editingItemId === item.id ? (
+                          <input
+                            type="text"
+                            value={editingItemName}
+                            onChange={(e) =>
+                              setEditingItemName(e.target.value)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                const trimmed = editingItemName.trim();
+                                if (trimmed && trimmed !== item.name) {
+                                  updateItemNameMutation.mutate({
+                                    itemId: item.id,
+                                    name: trimmed,
+                                  });
+                                } else {
+                                  setEditingItemId(null);
+                                  setEditingItemName("");
+                                }
+                              }
+                              if (e.key === "Escape") {
+                                setEditingItemId(null);
+                                setEditingItemName("");
+                              }
+                            }}
+                            onBlur={() => {
+                              const trimmed = editingItemName.trim();
+                              if (trimmed && trimmed !== item.name) {
+                                updateItemNameMutation.mutate({
+                                  itemId: item.id,
+                                  name: trimmed,
+                                });
+                              } else {
+                                setEditingItemId(null);
+                                setEditingItemName("");
+                              }
+                            }}
+                            className="min-w-0 flex-1 rounded-md border border-gray-200 px-2 py-1 text-[#374151] font-medium focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                            aria-label="Redigera namn"
+                            autoFocus
+                            disabled={updateItemNameMutation.isPending}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingItemId(item.id);
+                              setEditingItemName(item.name);
+                            }}
+                            className="min-w-0 flex-1 text-left font-medium text-[#374151] focus:outline-none focus:ring-2 focus:ring-[#2563eb] focus:ring-offset-1 rounded px-1 -mx-1 line-clamp-2"
+                            aria-label={`Redigera ${item.name}`}
+                          >
+                            {item.name}
+                          </button>
+                        )}
                         <div className="flex items-center gap-2">
                           <select
                             className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-[#374151] disabled:opacity-60"
@@ -963,6 +1110,12 @@ export default function ListView() {
                     placeholder="t.ex. mjölk, bröd, äpplen…"
                     value={newItemName}
                     onChange={(e) => setNewItemName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        (e.target as HTMLInputElement).form?.requestSubmit();
+                      }
+                    }}
                     aria-label="Namn på vara"
                     className="h-10 border-gray-200"
                   />

@@ -44,6 +44,17 @@ export async function removeListItem(itemId: string): Promise<void> {
   if (error) throw error
 }
 
+export async function updateListItemName(
+  itemId: string,
+  name: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('list_items')
+    .update({ name })
+    .eq('id', itemId)
+  if (error) throw error
+}
+
 export async function updateListItemCategory(
   itemId: string,
   categoryId: string
