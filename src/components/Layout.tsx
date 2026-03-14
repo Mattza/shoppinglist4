@@ -173,26 +173,6 @@ export default function Layout() {
                   className="absolute right-0 mt-2 w-44 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
                   role="menu"
                 >
-                  {listSlug && (
-                    <>
-                      <Link
-                        to={`/list/${listSlug}`}
-                        className="block w-full rounded-md px-3 py-2 text-left text-sm text-[#374151] hover:bg-gray-50"
-                        role="menuitem"
-                        onClick={() => setMenuOpen(false)}
-                      >
-                        Lista
-                      </Link>
-                      <Link
-                        to={`/list/${listSlug}/recommendations`}
-                        className="block w-full rounded-md px-3 py-2 text-left text-sm text-[#374151] hover:bg-gray-50"
-                        role="menuitem"
-                        onClick={() => setMenuOpen(false)}
-                      >
-                        Rekommendationer
-                      </Link>
-                    </>
-                  )}
                   <button
                     type="button"
                     className="block w-full rounded-md px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
@@ -210,6 +190,36 @@ export default function Layout() {
           </div>
         </div>
       </header>
+
+      {listSlug && (
+        <nav
+          className="border-b border-gray-200/80 bg-white/95 backdrop-blur"
+          aria-label="Listnavigering"
+        >
+          <div className="mx-auto flex max-w-3xl gap-1 px-4">
+            <Link
+              to={`/list/${listSlug}`}
+              className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                location.pathname === `/list/${listSlug}` && !location.pathname.endsWith("/recommendations")
+                  ? "border-[#2563eb] text-[#2563eb]"
+                  : "border-transparent text-[#6b7280] hover:border-gray-300 hover:text-[#374151]"
+              }`}
+            >
+              Lista
+            </Link>
+            <Link
+              to={`/list/${listSlug}/recommendations`}
+              className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                location.pathname.endsWith("/recommendations")
+                  ? "border-[#2563eb] text-[#2563eb]"
+                  : "border-transparent text-[#6b7280] hover:border-gray-300 hover:text-[#374151]"
+              }`}
+            >
+              Rekommendationer
+            </Link>
+          </div>
+        </nav>
+      )}
 
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-8">
         <Outlet />

@@ -36,6 +36,7 @@ export default function Recommendations() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [profileDraft, setProfileDraft] = useState("");
+  const [profileBarExpanded, setProfileBarExpanded] = useState(false);
 
   const { data: list } = useCurrentList(listSlug ?? undefined);
   const listId = list?.id;
@@ -104,14 +105,6 @@ export default function Recommendations() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-64">
       <header className="space-y-1">
-        <h1 className="text-3xl font-display font-semibold text-text">
-          Rekommendationer
-        </h1>
-        {list && (
-          <p className="text-sm text-text-muted">
-            För listan: <span className="font-semibold">{list.name}</span>
-          </p>
-        )}
         <p className="text-sm text-text-muted">
           Förslag baserat på vad du tidigare tagit bort från listan. Lägg till
           det du vill i listan. Beskriv dina preferenser nedan så blir
@@ -175,37 +168,118 @@ export default function Recommendations() {
       {listId &&
         user?.id &&
         createPortal(
-          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-4px_12px_rgba(15,23,42,0.08)] backdrop-blur-sm">
-            <div className="mx-auto max-w-3xl space-y-3">
-              <label className="block">
-                <span className="text-sm font-semibold text-text">
-                  Rekommendationsprofil
-                </span>
-                <p className="mt-0.5 text-xs text-text-muted">
-                  Beskriv vad du brukar handla, allergier eller preferenser så
-                  blir förslagen bättre anpassade.
-                </p>
-                <textarea
-                  value={profileDraft}
-                  onChange={(e) => setProfileDraft(e.target.value)}
-                  placeholder="t.ex. Vegetarisk hushåll, undviker nötter."
-                  rows={3}
-                  className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-text placeholder:text-text-muted focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
-                  aria-label="Rekommendationsprofil"
-                />
-              </label>
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  onClick={() => saveProfileMutation.mutate()}
-                  disabled={
-                    saveProfileMutation.isPending ||
-                    profileDraft === (profile ?? "")
-                  }
-                >
-                  {saveProfileMutation.isPending ? "Sparar…" : "Spara profil"}
-                </Button>
-              </div>
+          <div
+            className={`fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 shadow-[0_-4px_12px_rgba(15,23,42,0.08)] backdrop-blur-sm transition-[padding] ${
+              profileBarExpanded ? "px-4 py-3" : "px-4 py-2"
+            }`}
+          >
+            <div className="mx-auto max-w-3xl">
+              {profileBarExpanded ? (
+                <div className="relative space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => setProfileBarExpanded(false)}
+                    className="absolute right-0 top-0 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                    aria-label="Visa mindre"
+                    title="Visa mindre"
+                  >
+                    <svg
+                      className="h-5 w-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </button>
+                  <label className="block pr-10">
+                    <span className="text-sm font-semibold text-text">
+                      Rekommendationsprofil
+                    </span>
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      Beskriv vad du brukar handla, allergier eller preferenser
+                      så blir förslagen bättre anpassade.
+                    </p>
+                    <textarea
+                      value={profileDraft}
+                      onChange={(e) => setProfileDraft(e.target.value)}
+                      placeholder="t.ex. Vegetarisk hushåll, undviker nötter."
+                      rows={8}
+                      className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-text placeholder:text-text-muted focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                      aria-label="Rekommendationsprofil"
+                    />
+                  </label>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      onClick={() => saveProfileMutation.mutate()}
+                      disabled={
+                        saveProfileMutation.isPending ||
+                        profileDraft === (profile ?? "")
+                      }
+                    >
+                      {saveProfileMutation.isPending
+                        ? "Sparar…"
+                        : "Spara profil"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-xs font-medium text-text-muted">
+                      Rekommendationsprofil
+                    </span>
+                    <p className="truncate text-sm text-text">
+                      {profileDraft.trim()
+                        ? profileDraft.trim().slice(0, 60) +
+                          (profileDraft.trim().length > 60 ? "…" : "")
+                        : "Klicka för att redigera"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      type="button"
+                      onClick={() => saveProfileMutation.mutate()}
+                      disabled={
+                        saveProfileMutation.isPending ||
+                        profileDraft === (profile ?? "")
+                      }
+                      className="shrink-0"
+                    >
+                      {saveProfileMutation.isPending ? "Sparar…" : "Spara"}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => setProfileBarExpanded(true)}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                      aria-label="Visa mer"
+                      title="Visa mer"
+                    >
+                      <svg
+                        className="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 15l7-7 7 7"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>,
           document.body
