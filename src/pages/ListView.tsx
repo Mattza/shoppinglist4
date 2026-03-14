@@ -5,10 +5,27 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useCurrentList } from "@/hooks/useCurrentList";
+import { fetchCategories } from "@/hooks/useCategories";
+import {
+  fetchListItems,
+  addListItem,
+  removeListItem,
+  updateListItemCategory,
+  moveListItemsToCategory,
+  type ListItemWithCategory,
+} from "@/hooks/useListItems";
+import {
+  addCategory,
+  updateCategoryColor,
+  updateCategorySortOrder,
+  deleteCategory,
+} from "@/hooks/useCategories";
+import { insertArchivedItem } from "@/hooks/useArchivedItems";
+import { deleteList } from "@/hooks/useLists";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Card } from "@/components/Card";
-import type { Category, ListItem } from "@/types/database";
+import type { Category } from "@/types/database";
 
 // Stable color per category (hash id → palette index)
 const CATEGORY_COLORS = [
@@ -38,29 +55,6 @@ function getEffectiveCategoryColor(cat: Category): {
 } {
   const hex = cat.color ?? getCategoryColor(cat.id).border;
   return { border: hex, bg: `${hex}18` };
-}
-
-async function fetchCategories(listId: string) {
-  const { data, error } = await supabase
-    .from("categories")
-    .select("*")
-    .eq("list_id", listId)
-    .order("sort_order");
-  if (error) throw error;
-  return (data ?? []) as Category[];
-}
-
-type ListItemWithCategory = ListItem & {
-  category: { name: string } | null;
-};
-
-async function fetchItems(listId: string): Promise<ListItemWithCategory[]> {
-  const { data, error } = await supabase
-    .from("list_items")
-    .select("*, category:categories(name)")
-    .eq("list_id", listId);
-  if (error) throw error;
-  return (data ?? []) as ListItemWithCategory[];
 }
 
 export default function ListView() {
@@ -99,7 +93,7 @@ export default function ListView() {
     isPending: itemsPending,
   } = useQuery({
     queryKey: ["list_items", listId],
-    queryFn: () => fetchItems(listId!),
+    queryFn: () => fetchListItems(listId!),
     enabled: !!listId,
   });
 
@@ -156,18 +150,7 @@ export default function ListView() {
       categoryId: string;
     }) => {
       if (!listId || !categoryId) throw new Error("Ingen kategori vald");
-      const { data, error } = await supabase
-        .from("list_items")
-        .insert({
-          list_id: listId,
-          category_id: categoryId,
-          name,
-          created_by: user?.id,
-        })
-        .select("*, category:categories(name)")
-        .single();
-      if (error) throw error;
-      return data as ListItemWithCategory;
+      return addListItem(listId, categoryId, name, user?.id);
     },
     onSuccess: (newItem) => {
       if (!listId) return;
@@ -181,21 +164,13 @@ export default function ListView() {
 
   const removeItemMutation = useMutation({
     mutationFn: async (item: ListItemWithCategory) => {
-      const { error } = await supabase
-        .from("list_items")
-        .delete()
-        .eq("id", item.id);
-      if (error) throw error;
-      // Archive in background – don't block UI
-      supabase
-        .from("archived_items")
-        .insert({
-          list_id: listId!,
-          user_id: user!.id,
-          name: item.name,
-          category_name: item.category?.name ?? null,
-        })
-        .then(() => {});
+      await removeListItem(item.id);
+      insertArchivedItem({
+        list_id: listId!,
+        user_id: user!.id,
+        name: item.name,
+        category_name: item.category?.name ?? null,
+      }).catch(() => {});
     },
     onSuccess: (_, item) => {
       if (!listId) return;
@@ -214,11 +189,7 @@ export default function ListView() {
       itemId: string;
       categoryId: string;
     }) => {
-      const { error } = await supabase
-        .from("list_items")
-        .update({ category_id: categoryId })
-        .eq("id", itemId);
-      if (error) throw error;
+      await updateListItemCategory(itemId, categoryId);
     },
     onSuccess: (_, { itemId, categoryId }) => {
       if (!listId) return;
@@ -243,13 +214,7 @@ export default function ListView() {
   const addCategoryMutation = useMutation({
     mutationFn: async (name: string) => {
       const maxOrder = Math.max(0, ...categories.map((c) => c.sort_order));
-      const { data, error } = await supabase
-        .from("categories")
-        .insert({ list_id: listId!, name, sort_order: maxOrder + 1 })
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Category;
+      return addCategory(listId!, name, maxOrder + 1);
     },
     onSuccess: (newCategory) => {
       if (!listId) return;
@@ -270,18 +235,13 @@ export default function ListView() {
         throw new Error("Ingen annan kategori att flytta varor till.");
       const count = items.filter((i) => i.category_id === categoryId).length;
       if (count > 0) {
-        const { error: updateError } = await supabase
-          .from("list_items")
-          .update({ category_id: fallbackCategory.id })
-          .eq("list_id", listId!)
-          .eq("category_id", categoryId);
-        if (updateError) throw updateError;
+        await moveListItemsToCategory(
+          listId!,
+          categoryId,
+          fallbackCategory.id
+        );
       }
-      const { error } = await supabase
-        .from("categories")
-        .delete()
-        .eq("id", categoryId);
-      if (error) throw error;
+      await deleteCategory(categoryId);
     },
     onSuccess: (_, categoryId) => {
       if (!listId) return;
@@ -313,11 +273,7 @@ export default function ListView() {
       categoryId: string;
       color: string | null;
     }) => {
-      const { error } = await supabase
-        .from("categories")
-        .update({ color })
-        .eq("id", categoryId);
-      if (error) throw error;
+      await updateCategoryColor(categoryId, color);
     },
     onSuccess: (_, { categoryId, color }) => {
       if (!listId) return;
@@ -345,16 +301,8 @@ export default function ListView() {
         throw new Error("Kan inte flytta längre");
       const cat = current[idx];
       const other = current[swapIdx];
-      const { error: err1 } = await supabase
-        .from("categories")
-        .update({ sort_order: other.sort_order })
-        .eq("id", cat.id);
-      if (err1) throw err1;
-      const { error: err2 } = await supabase
-        .from("categories")
-        .update({ sort_order: cat.sort_order })
-        .eq("id", other.id);
-      if (err2) throw err2;
+      await updateCategorySortOrder(cat.id, other.sort_order);
+      await updateCategorySortOrder(other.id, cat.sort_order);
     },
     onMutate: async ({ categoryId, direction }) => {
       if (!listId) return;
@@ -386,8 +334,7 @@ export default function ListView() {
   const deleteListMutation = useMutation({
     mutationFn: async () => {
       if (!listId) throw new Error("Ingen lista");
-      const { error } = await supabase.from("lists").delete().eq("id", listId);
-      if (error) throw error;
+      await deleteList(listId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lists"] });

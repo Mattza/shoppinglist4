@@ -4,6 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useCurrentList } from '@/hooks/useCurrentList'
 import { useAuth } from '@/hooks/useAuth'
+import { fetchCategories } from '@/hooks/useCategories'
+import { getRecommendationProfile } from '@/hooks/useRecommendationProfiles'
+import { addListItem } from '@/hooks/useListItems'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { Card } from '@/components/Card'
@@ -31,15 +34,7 @@ export default function Recommendations() {
   const listId = list?.id
   const { data: profile } = useQuery({
     queryKey: ['recommendation_profile', listId, user?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('recommendation_profiles')
-        .select('profile_snapshot')
-        .eq('user_id', user!.id)
-        .eq('list_id', listId!)
-        .maybeSingle()
-      return data?.profile_snapshot ?? null
-    },
+    queryFn: () => getRecommendationProfile(user!.id, listId!),
     enabled: !!listId && !!user?.id,
   })
 
@@ -59,23 +54,13 @@ export default function Recommendations() {
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', listId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('categories').select('id, name').eq('list_id', listId!).order('sort_order')
-      if (error) throw error
-      return data ?? []
-    },
+    queryFn: () => fetchCategories(listId!),
     enabled: !!listId,
   })
 
   const addToListMutation = useMutation({
     mutationFn: async ({ name, categoryId }: { name: string; categoryId: string }) => {
-      const { error } = await supabase.from('list_items').insert({
-        list_id: listId!,
-        category_id: categoryId,
-        name,
-        created_by: user?.id,
-      })
-      if (error) throw error
+      await addListItem(listId!, categoryId, name, user?.id)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['list_items', listId] })
