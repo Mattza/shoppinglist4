@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.update-recommendation-profile]
 verify_jwt = false
+
+[functions.generate-weekly-menu]
+verify_jwt = false
+
+[functions.replace-weekly-meal]
+verify_jwt = false

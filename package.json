@@ -9,7 +9,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "deploy": "npm run build && netlify deploy --prod --dir=dist",
-    "deploy:functions": "supabase functions deploy"
+    "deploy:functions": "supabase functions deploy",
+    "deploy:db": "supabase db push",
+    "seed:list-recipes": "npx supabase@latest db query --linked -f supabase/seeds/seed_list_recipes_4aafd57d.sql"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

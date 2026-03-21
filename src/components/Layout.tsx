@@ -33,6 +33,7 @@ export default function Layout() {
   const [listsOpen, setListsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const listsRef = useRef<HTMLDivElement>(null);
+  const listNavScrollRef = useRef<HTMLDivElement>(null);
   const { data: lists = [] } = useLists();
   const { data: currentList } = useCurrentList(listSlug ?? undefined);
 
@@ -59,6 +60,19 @@ export default function Layout() {
       // ignore
     }
   }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    const active = listNavScrollRef.current?.querySelector(
+      "a[aria-current='page']"
+    );
+    if (active instanceof HTMLElement) {
+      active.scrollIntoView({
+        behavior: "smooth",
+        inline: "center",
+        block: "nearest",
+      });
+    }
+  }, [location.pathname, listSlug]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -196,10 +210,19 @@ export default function Layout() {
           className="border-b border-gray-200/80 bg-white/95 backdrop-blur"
           aria-label="Listnavigering"
         >
-          <div className="mx-auto flex max-w-3xl gap-1 px-4">
+          <div
+            ref={listNavScrollRef}
+            className="list-nav-scroll mx-auto flex max-w-3xl min-w-0 flex-nowrap gap-1 overflow-x-auto overflow-y-hidden px-4 pb-1.5 scroll-smooth"
+          >
             <Link
               to={`/list/${listSlug}`}
-              className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+              aria-current={
+                location.pathname === `/list/${listSlug}` &&
+                !location.pathname.endsWith("/recommendations")
+                  ? "page"
+                  : undefined
+              }
+              className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors sm:px-4 ${
                 location.pathname === `/list/${listSlug}` && !location.pathname.endsWith("/recommendations")
                   ? "border-[#2563eb] text-[#2563eb]"
                   : "border-transparent text-[#6b7280] hover:border-gray-300 hover:text-[#374151]"
@@ -209,13 +232,36 @@ export default function Layout() {
             </Link>
             <Link
               to={`/list/${listSlug}/recommendations`}
-              className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+              aria-current={location.pathname.endsWith("/recommendations") ? "page" : undefined}
+              className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors sm:px-4 ${
                 location.pathname.endsWith("/recommendations")
                   ? "border-[#2563eb] text-[#2563eb]"
                   : "border-transparent text-[#6b7280] hover:border-gray-300 hover:text-[#374151]"
               }`}
             >
               Rekommendationer
+            </Link>
+            <Link
+              to={`/list/${listSlug}/veckomeny`}
+              aria-current={location.pathname.endsWith("/veckomeny") ? "page" : undefined}
+              className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors sm:px-4 ${
+                location.pathname.endsWith("/veckomeny")
+                  ? "border-[#2563eb] text-[#2563eb]"
+                  : "border-transparent text-[#6b7280] hover:border-gray-300 hover:text-[#374151]"
+              }`}
+            >
+              Veckomeny
+            </Link>
+            <Link
+              to={`/list/${listSlug}/recept`}
+              aria-current={location.pathname.endsWith("/recept") ? "page" : undefined}
+              className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors sm:px-4 ${
+                location.pathname.endsWith("/recept")
+                  ? "border-[#2563eb] text-[#2563eb]"
+                  : "border-transparent text-[#6b7280] hover:border-gray-300 hover:text-[#374151]"
+              }`}
+            >
+              Recept
             </Link>
           </div>
         </nav>

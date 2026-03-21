@@ -5,6 +5,8 @@ import Login from '@/pages/Login'
 import Lists from '@/pages/Lists'
 import ListView from '@/pages/ListView'
 import Recommendations from '@/pages/Recommendations'
+import WeeklyMenu from '@/pages/WeeklyMenu'
+import ListRecipes from '@/pages/ListRecipes'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth()
@@ -29,6 +31,8 @@ export default function App() {
           <Route index element={<Lists />} />
           <Route path="list/:listSlug" element={<ListView />} />
           <Route path="list/:listSlug/recommendations" element={<Recommendations />} />
+          <Route path="list/:listSlug/veckomeny" element={<WeeklyMenu />} />
+          <Route path="list/:listSlug/recept" element={<ListRecipes />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

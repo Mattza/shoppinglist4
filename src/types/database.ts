@@ -9,6 +9,16 @@ export interface List {
   updated_at: string
 }
 
+/** Delade veckomeny-inställningar per lista (synkas för alla medlemmar). */
+export interface ListWeeklyMenuSettings {
+  list_id: string
+  /** Fritextfältet "Preferenser och kontext". */
+  preferences: string
+  /** Reglaget "Balans": 0–100, andel från receptbanken. */
+  known_ratio: number
+  updated_at: string
+}
+
 export interface ListMember {
   list_id: string
   user_id: string
@@ -48,6 +58,27 @@ export interface RecommendationProfile {
   list_id: string | null
   profile_snapshot: string | null
   updated_at: string
+}
+
+export interface ListRecipe {
+  id: string
+  list_id: string
+  name: string
+  score: number
+  sort_order: number
+  created_at: string
+  updated_at: string
+  created_by?: string | null
+}
+
+export interface SavedWeeklyMenu {
+  id: string
+  list_id: string
+  week_start: string
+  meals: string[]
+  created_at: string
+  updated_at: string
+  created_by?: string | null
 }
 
 export interface ListWithMembership extends List {
